@@ -257,7 +257,8 @@ export default function PublicProfilePage() {
       )}
 
       {/* Footer */}
-      <div style={{ marginTop: '48px', textAlign: 'center', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ marginTop: '48px', textAlign: 'center', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'center', gap: '24px', flexWrap: 'wrap' }}>
+        <a href="https://getlyve.ai/browse" style={{ color: '#9CA3AF', fontSize: '13px' }}>Browse all artists</a>
         <a href="https://getlyve.ai" style={{ color: '#9CA3AF', fontSize: '13px' }}>
           Powered by <span style={{ color: '#7C3AED', fontWeight: 600 }}>lyve.</span>
         </a>

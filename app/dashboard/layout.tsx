@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { Home, SlidersHorizontal, FolderOpen, CalendarDays, Inbox, ExternalLink } from 'lucide-react'
+import { Home, SlidersHorizontal, FolderOpen, CalendarDays, Inbox, ExternalLink, Users } from 'lucide-react'
 
 const NAV = [
   { href: '/dashboard', label: 'Home', icon: <Home size={15} /> },
@@ -11,6 +11,7 @@ const NAV = [
   { href: '/dashboard/assets', label: 'Press Kit & Assets', icon: <FolderOpen size={15} /> },
   { href: '/dashboard/calendar', label: 'Calendar', icon: <CalendarDays size={15} /> },
   { href: '/dashboard/requests', label: 'Booking Requests', icon: <Inbox size={15} /> },
+  { href: '/browse', label: 'Browse Artists', icon: <Users size={15} /> },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

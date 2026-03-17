@@ -101,6 +101,9 @@ export default function LoginPage() {
           Don&apos;t have an account?{' '}
           <Link href="/signup" style={{ color: '#9F67FF', fontWeight: 500 }}>Sign up free</Link>
         </p>
+        <p style={{ textAlign: 'center', marginTop: '12px', fontSize: '13px' }}>
+          <Link href="/browse" style={{ color: '#6B7280' }}>Browse artists →</Link>
+        </p>
       </div>
     </div>
   )
