@@ -7,7 +7,8 @@ import Link from 'next/link'
 const NAV = [
   { href: '/dashboard', label: 'Home', icon: '🏠' },
   { href: '/dashboard/profile', label: 'My Profile', icon: '🎛️' },
-  { href: '/dashboard/assets', label: 'Assets & Press Kit', icon: '📁' },
+  { href: '/dashboard/presskit', label: 'AI Press Kit', icon: '✨' },
+  { href: '/dashboard/assets', label: 'Assets', icon: '📁' },
   { href: '/dashboard/calendar', label: 'Calendar', icon: '📅' },
   { href: '/dashboard/requests', label: 'Booking Requests', icon: '📩' },
 ]

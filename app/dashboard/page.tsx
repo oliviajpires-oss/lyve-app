@@ -88,9 +88,9 @@ export default function DashboardHome() {
         <h3 style={{ marginBottom: '16px', fontSize: '15px' }}>Quick Actions</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
           {[
+            { href: '/dashboard/presskit', icon: '✨', label: 'AI Press Kit', desc: 'Generate your bio, captions & reel script' },
             { href: '/dashboard/profile', icon: '🎛️', label: 'Edit Profile', desc: 'Update your bio, genre, socials' },
             { href: '/dashboard/assets', icon: '📁', label: 'Upload Assets', desc: 'Press kit, mixes, promo videos' },
-            { href: '/dashboard/calendar', icon: '📅', label: 'Set Availability', desc: 'Sync your Google Calendar' },
             { href: '/dashboard/requests', icon: '📩', label: 'Booking Requests', desc: 'View incoming venue requests' },
           ].map((action, i) => (
             <Link key={i} href={action.href} style={{
