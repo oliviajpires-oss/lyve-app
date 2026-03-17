@@ -3,48 +3,57 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, genres, city, vibe, gigs, years, influences, instagram } = body
+    const { name, city, instagram, bio } = body
 
-    if (!name || !genres || !city || !vibe) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
+    if (!bio || bio.trim().length < 20) {
+      return NextResponse.json({ success: false, error: 'Bio is too short' }, { status: 400 })
     }
 
-    const prompt = `You are a professional music industry copywriter specializing in DJ/artist branding. Generate a complete AI Press Kit for this DJ/artist.
+    const prompt = `You are a music industry publicist helping a DJ build their press kit. A DJ has written their own bio in their own words. Your job is to take their authentic voice and create press kit assets that sound like THEM — not like a generic AI bio.
 
-ARTIST INFO:
-- Name: ${name}
-- Genres: ${genres}
-- City: ${city}
-- Vibe/Style: ${vibe}
-- Notable Gigs/Events: ${gigs || 'Not specified'}
-- Years Active: ${years || 'Not specified'}
-- Influences: ${influences || 'Not specified'}
-- Instagram: ${instagram ? '@' + instagram.replace('@','') : 'Not specified'}
+THEIR WRITTEN BIO:
+"${bio}"
 
-Generate a JSON response with EXACTLY this structure (no markdown, pure JSON):
+ADDITIONAL INFO:
+- Name: ${name || '(use what\'s in the bio)'}
+- City: ${city || '(use what\'s in the bio)'}
+- Instagram: ${instagram ? '@' + instagram.replace('@', '') : '(not provided)'}
+
+RULES:
+1. Pull specific phrases, words, and personality from THEIR bio — do not invent new facts
+2. Match their tone — if they're casual, keep it casual. If they're more formal, match that
+3. Never use clichés like "takes listeners on a journey", "has been making waves", "seamlessly blends"
+4. Keep everything grounded in what they actually said
+5. Story captions should feel like something a real person would post — not a press release
+
+Respond with ONLY valid JSON (no markdown, no code blocks):
 {
-  "bio_short": "A punchy 2-3 sentence bio for booking inquiries (under 100 words). Professional and energetic.",
-  "bio_long": "A full 150-200 word artist bio. Tell their story, their sound, their impact. Use present tense. No clichés.",
-  "booking_description": "A 50-75 word description venues use when announcing this DJ. Focus on the experience they bring to a room.",
-  "genre_tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "bio_refined": "A polished version of their bio, keeping their voice and personality but cleaning up any awkward phrasing. 3-4 sentences. Should still sound like them.",
+  "booking_pitch": "A 2-3 sentence pitch specifically for venue bookers. Lead with what they bring to a room, end with availability/contact hook. Pulled from their actual story.",
+  "genre_tags": ["5 specific genre/style tags extracted from their bio — be specific, not generic"],
+  "one_liners": [
+    "A punchy one-liner description (under 15 words) in their voice",
+    "A second one-liner with a different angle",
+    "A third one-liner — funny or self-aware if their bio suggests that personality"
+  ],
   "story_captions": [
-    {"type": "Available to Book", "caption": "Ready to post story caption announcing availability. Include genres and city. Add 3-5 relevant hashtags. Under 150 chars."},
-    {"type": "Hype/Energy", "caption": "High energy caption for promoting a set or event. Bold, punchy. Under 150 chars with hashtags."},
-    {"type": "Aesthetic/Minimal", "caption": "Minimal, cool, mood-focused caption. Less is more. Under 100 chars."},
-    {"type": "Post-Show Recap", "caption": "After the event caption. Grateful but not cringe. Under 150 chars."},
-    {"type": "Booking Inquiry CTA", "caption": "Direct caption to drive booking inquiries. Clear call to action. Under 150 chars."}
+    {"type": "Available to Book", "caption": "Caption using their actual language and references. Feels like them. 1-2 sentences + 3-4 hashtags."},
+    {"type": "Hype/Pre-Show", "caption": "Hype caption before a set. Uses their personality. Short and punchy."},
+    {"type": "Aesthetic/Mood", "caption": "Minimal vibe caption. Could just be a lyric, a feeling, or a short phrase that fits their aesthetic."},
+    {"type": "Post-Show", "caption": "After the set caption. Grateful but not cringe. Feels natural."},
+    {"type": "Booking CTA", "caption": "Direct ask for bookings. Their voice, not corporate."}
   ],
   "canva_brief": {
-    "headline": "Short bold headline for a story graphic (under 8 words)",
-    "subline": "Supporting line for the graphic (under 12 words)",
-    "mood_keywords": ["keyword1", "keyword2", "keyword3"],
-    "color_direction": "Brief color/mood direction for their brand aesthetic"
+    "headline": "Headline for a story graphic — pulled from their language, under 6 words",
+    "subline": "Supporting text for the graphic, under 10 words",
+    "mood_keywords": ["3 mood/aesthetic words that describe their vibe based on their bio"],
+    "color_direction": "Brief description of what colors/aesthetic fits their described sound and personality"
   },
   "video_script": {
-    "hook": "Opening line/visual for a 20-sec promo reel (first 3 seconds)",
-    "middle": "What happens in seconds 4-15 — describe the energy, visuals, pacing",
-    "cta": "Final 5 seconds — what they say or show as a call to action",
-    "music_note": "Describe the type of track that should play under this reel"
+    "hook": "First 3 seconds of a 20-sec promo reel — what visual or line grabs attention based on their personality",
+    "middle": "Seconds 4-15 — what clips/energy/vibe would work based on how they describe their sets",
+    "cta": "Final 5 seconds — what they say or show, in their voice",
+    "music_note": "What kind of track from their described genre/vibe would work under this reel"
   }
 }`
 
@@ -56,23 +65,20 @@ Generate a JSON response with EXACTLY this structure (no markdown, pure JSON):
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 1500,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     })
 
     if (!response.ok) {
       const errText = await response.text()
-      return NextResponse.json({ success: false, error: `Anthropic API error: ${response.status}`, detail: errText }, { status: 500 })
+      return NextResponse.json({ success: false, error: `API error ${response.status}`, detail: errText }, { status: 500 })
     }
 
     const data = await response.json()
     const text = data.content?.[0]?.text || ''
-
-    // Strip markdown code blocks if present
     const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
-
     const kit = JSON.parse(cleaned)
     return NextResponse.json({ success: true, kit })
 

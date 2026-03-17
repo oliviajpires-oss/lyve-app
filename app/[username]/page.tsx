@@ -14,6 +14,7 @@ type Profile = {
   soundcloud?: string
   spotify?: string
   website?: string
+  avatar_url?: string
 }
 
 type Asset = {
@@ -83,8 +84,13 @@ export default function PublicProfilePage() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '40px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #7C3AED, #9F67FF)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', flexShrink: 0 }}>
-            🎛️
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', flexShrink: 0, overflow: 'hidden' }}>
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.avatar_url} alt={profile.display_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              '🎛️'
+            )}
           </div>
           <div>
             <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '4px' }}>{profile.display_name}</h1>

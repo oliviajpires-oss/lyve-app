@@ -3,14 +3,14 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { Home, SlidersHorizontal, FolderOpen, CalendarDays, Inbox, ExternalLink } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard', label: 'Home', icon: '🏠' },
-  { href: '/dashboard/profile', label: 'My Profile', icon: '🎛️' },
-  { href: '/dashboard/presskit', label: 'AI Press Kit', icon: '✨' },
-  { href: '/dashboard/assets', label: 'Assets', icon: '📁' },
-  { href: '/dashboard/calendar', label: 'Calendar', icon: '📅' },
-  { href: '/dashboard/requests', label: 'Booking Requests', icon: '📩' },
+  { href: '/dashboard', label: 'Home', icon: <Home size={15} /> },
+  { href: '/dashboard/profile', label: 'My Profile', icon: <SlidersHorizontal size={15} /> },
+  { href: '/dashboard/assets', label: 'Press Kit & Assets', icon: <FolderOpen size={15} /> },
+  { href: '/dashboard/calendar', label: 'Calendar', icon: <CalendarDays size={15} /> },
+  { href: '/dashboard/requests', label: 'Booking Requests', icon: <Inbox size={15} /> },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -44,8 +44,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         position: 'fixed', height: '100vh', overflowY: 'auto'
       }}>
         <div style={{ marginBottom: '32px', paddingLeft: '8px' }}>
-          <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.5px' }}>
-            lyve<span style={{ color: '#7C3AED' }}>.</span>
+          <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.5px',
+            background: 'linear-gradient(135deg, #C4A0FF, #7C3AED)', WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent', backgroundClip: 'text', display: 'inline-block' }}>
+            lyve.
           </div>
         </div>
 
@@ -55,13 +57,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return (
               <Link key={item.href} href={item.href} style={{
                 display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
-                borderRadius: '8px', marginBottom: '4px', fontSize: '14px', fontWeight: 500,
-                background: active ? 'rgba(124,58,237,0.15)' : 'transparent',
-                color: active ? '#9F67FF' : '#9CA3AF',
-                border: active ? '1px solid rgba(124,58,237,0.2)' : '1px solid transparent',
-                transition: 'all 0.2s'
+                borderRadius: '8px', marginBottom: '4px', fontSize: '14px', fontWeight: 400,
+                background: active ? 'rgba(124,58,237,0.2)' : 'transparent',
+                color: active ? '#C4A0FF' : '#9CA3AF',
+                border: active ? '1px solid rgba(124,58,237,0.35)' : '1px solid transparent',
+                transition: 'all 0.2s',
+                boxShadow: active ? '0 0 12px rgba(124,58,237,0.15)' : 'none',
               }}>
-                <span>{item.icon}</span>
+                {item.icon}
                 {item.label}
               </Link>
             )
@@ -76,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               background: 'rgba(124,58,237,0.08)', marginBottom: '8px',
               border: '1px solid rgba(124,58,237,0.15)'
             }}>
-              <span>🔗</span> View Public Profile
+              <ExternalLink size={13} /> View Public Profile
             </Link>
           )}
           <div style={{ padding: '8px 12px', fontSize: '13px', color: '#9CA3AF', marginBottom: '8px' }}>

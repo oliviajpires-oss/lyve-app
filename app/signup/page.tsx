@@ -1,4 +1,5 @@
 'use client'
+import { Mail } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -59,7 +60,7 @@ export default function SignupPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
         <div className="card" style={{ maxWidth: '400px', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📬</div>
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}><Mail size={44} color="#9F67FF" /></div>
           <h2 style={{ marginBottom: '8px' }}>Check your email</h2>
           <p style={{ color: '#9CA3AF', fontSize: '14px' }}>
             We sent a confirmation link to <strong style={{ color: 'white' }}>{form.email}</strong>.
