@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { CalendarDays, CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -9,31 +9,38 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 export default function CalendarPage() {
   const [today] = useState(new Date())
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [busyDates, setBusyDates] = useState<Set<string>>(new Set())
+  const [busySlots, setBusySlots] = useState<Set<string>>(new Set())
   const [userId, setUserId] = useState('')
   const [gcalConnected] = useState(false)
+  const [activeDate, setActiveDate] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       setUserId(user.id)
-      const { data } = await supabase.from('availability').select('date').eq('artist_id', user.id).eq('available', false)
-      if (data) setBusyDates(new Set(data.map((d: { date: string }) => d.date)))
+      const { data } = await supabase
+        .from('availability')
+        .select('date')
+        .eq('artist_id', user.id)
+        .eq('available', false)
+      if (data) setBusySlots(new Set(data.map((d: { date: string }) => d.date)))
     })
   }, [])
 
-  const toggleDate = async (dateStr: string) => {
+  const toggleSlot = async (dateStr: string, slot: 'day' | 'night') => {
     const supabase = createClient()
-    const newBusy = new Set(busyDates)
-    if (newBusy.has(dateStr)) {
-      newBusy.delete(dateStr)
-      await supabase.from('availability').delete().eq('artist_id', userId).eq('date', dateStr)
+    const key = `${dateStr}_${slot}`
+    const newBusy = new Set(busySlots)
+
+    if (newBusy.has(key)) {
+      newBusy.delete(key)
+      await supabase.from('availability').delete().eq('artist_id', userId).eq('date', key)
     } else {
-      newBusy.add(dateStr)
-      await supabase.from('availability').upsert({ artist_id: userId, date: dateStr, available: false })
+      newBusy.add(key)
+      await supabase.from('availability').upsert({ artist_id: userId, date: key, available: false })
     }
-    setBusyDates(newBusy)
+    setBusySlots(newBusy)
   }
 
   const getDaysInMonth = (date: Date) => {
@@ -45,14 +52,14 @@ export default function CalendarPage() {
   }
 
   const { firstDay, daysInMonth, year, month } = getDaysInMonth(currentMonth)
-  const prevMonth = () => setCurrentMonth(new Date(year, month - 1))
-  const nextMonth = () => setCurrentMonth(new Date(year, month + 1))
+  const prevMonth = () => { setActiveDate(null); setCurrentMonth(new Date(year, month - 1)) }
+  const nextMonth = () => { setActiveDate(null); setCurrentMonth(new Date(year, month + 1)) }
 
   return (
     <div style={{ maxWidth: '720px' }}>
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>Calendar & Availability</h1>
-        <p style={{ color: '#9CA3AF', fontSize: '14px' }}>Mark dates you&apos;re unavailable so venues only request open dates.</p>
+        <p style={{ color: '#9CA3AF', fontSize: '14px' }}>Mark when you&apos;re unavailable — by day, night, or both.</p>
       </div>
 
       {/* Google Calendar connect banner */}
@@ -61,7 +68,6 @@ export default function CalendarPage() {
         border: gcalConnected ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(66,133,244,0.25)',
         boxShadow: gcalConnected ? 'none' : '0 0 30px rgba(66,133,244,0.07)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Google Logo */}
           <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
             <svg viewBox="0 0 24 24" width="26" height="26">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -118,36 +124,125 @@ export default function CalendarPage() {
             const day = i + 1
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             const isToday = dateStr === today.toISOString().split('T')[0]
-            const isBusy = busyDates.has(dateStr)
             const isPast = new Date(dateStr) < new Date(today.toISOString().split('T')[0])
+            const dayBusy = busySlots.has(`${dateStr}_day`)
+            const nightBusy = busySlots.has(`${dateStr}_night`)
+            const isActive = activeDate === dateStr
+
+            // Background color: both busy = red, one = yellow, none = default
+            const bgColor = (dayBusy && nightBusy)
+              ? 'rgba(239,68,68,0.2)'
+              : (dayBusy || nightBusy)
+              ? 'rgba(251,191,36,0.15)'
+              : isToday
+              ? 'rgba(124,58,237,0.3)'
+              : 'rgba(255,255,255,0.03)'
 
             return (
-              <button key={day} onClick={() => !isPast && toggleDate(dateStr)} style={{
-                padding: '8px 4px', borderRadius: '6px', border: 'none', cursor: isPast ? 'default' : 'pointer',
-                textAlign: 'center', fontSize: '13px', fontWeight: isToday ? 700 : 400,
-                background: isBusy ? 'rgba(239,68,68,0.2)' : isToday ? 'rgba(124,58,237,0.3)' : 'rgba(255,255,255,0.03)',
-                color: isBusy ? '#f87171' : isPast ? '#555' : isToday ? '#9F67FF' : 'white',
-                transition: 'all 0.15s',
-                outline: isToday ? '1px solid rgba(124,58,237,0.5)' : 'none'
-              }}>
-                {day}
-              </button>
+              <div key={day} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => !isPast && setActiveDate(isActive ? null : dateStr)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 4px',
+                    borderRadius: '6px',
+                    border: isActive ? '1px solid rgba(124,58,237,0.6)' : 'none',
+                    cursor: isPast ? 'default' : 'pointer',
+                    textAlign: 'center',
+                    fontSize: '13px',
+                    fontWeight: isToday ? 700 : 400,
+                    background: bgColor,
+                    color: (dayBusy && nightBusy) ? '#f87171' : (dayBusy || nightBusy) ? '#fbbf24' : isPast ? '#555' : isToday ? '#9F67FF' : 'white',
+                    transition: 'all 0.15s',
+                    outline: isToday && !isActive ? '1px solid rgba(124,58,237,0.5)' : 'none'
+                  }}>
+                  <div>{day}</div>
+                  {/* Slot indicators */}
+                  {!isPast && (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '3px' }}>
+                      <span style={{ fontSize: '8px', opacity: dayBusy ? 1 : 0.3 }}>☀️</span>
+                      <span style={{ fontSize: '8px', opacity: nightBusy ? 1 : 0.3 }}>🌙</span>
+                    </div>
+                  )}
+                </button>
+
+                {/* Slot popover */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 10,
+                    background: '#1a1a2e',
+                    border: '1px solid rgba(124,58,237,0.4)',
+                    borderRadius: '10px',
+                    padding: '10px',
+                    marginTop: '4px',
+                    minWidth: '110px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px'
+                  }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSlot(dateStr, 'day') }}
+                      style={{
+                        padding: '7px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: dayBusy ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)',
+                        color: dayBusy ? '#fbbf24' : '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                      ☀️ Day {dayBusy ? '(Busy)' : '(Free)'}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSlot(dateStr, 'night') }}
+                      style={{
+                        padding: '7px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: nightBusy ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)',
+                        color: nightBusy ? '#fbbf24' : '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                      🌙 Night {nightBusy ? '(Busy)' : '(Free)'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
 
-        <div style={{ marginTop: '16px', display: 'flex', gap: '16px', fontSize: '12px', color: '#9CA3AF' }}>
+        {/* Legend */}
+        <div style={{ marginTop: '20px', display: 'flex', gap: '16px', fontSize: '12px', color: '#9CA3AF', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)' }} />
-            Busy / Unavailable
+            Fully Booked
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)' }} />
+            Partially Booked
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }} />
             Available
           </div>
         </div>
-        <p style={{ marginTop: '12px', fontSize: '12px', color: '#9CA3AF' }}>
-          Click any date to toggle busy/available. Venues will only see available dates when browsing.
+        <p style={{ marginTop: '10px', fontSize: '12px', color: '#9CA3AF' }}>
+          Click a date to toggle ☀️ day and 🌙 night availability independently.
         </p>
       </div>
     </div>
