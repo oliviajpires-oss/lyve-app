@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Cloud } from 'lucide-react'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -13,6 +13,12 @@ export default function CalendarPage() {
   const [userId, setUserId] = useState('')
   const [gcalConnected] = useState(false)
   const [activeDate, setActiveDate] = useState<string | null>(null)
+  const [showIcloudForm, setShowIcloudForm] = useState(false)
+  const [icloudId, setIcloudId] = useState('')
+  const [icloudPass, setIcloudPass] = useState('')
+  const [icloudStatus, setIcloudStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
+  const [icloudLoading, setIcloudLoading] = useState(false)
+  const [icloudConnected, setIcloudConnected] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -49,6 +55,35 @@ export default function CalendarPage() {
     const firstDay = new Date(year, month, 1).getDay()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     return { firstDay, daysInMonth, year, month }
+  }
+
+  const syncIcloud = async () => {
+    if (!icloudId || !icloudPass) return
+    setIcloudLoading(true)
+    setIcloudStatus(null)
+    try {
+      const res = await fetch('/api/calendar/icloud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appleId: icloudId, appPassword: icloudPass }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setIcloudStatus({ type: 'error', msg: data.error || 'Connection failed.' })
+      } else {
+        // Update local busySlots with synced data
+        if (data.slots?.length) {
+          setBusySlots(prev => new Set([...prev, ...data.slots]))
+        }
+        setIcloudConnected(true)
+        setIcloudStatus({ type: 'success', msg: data.message })
+        setShowIcloudForm(false)
+        setIcloudPass('') // clear password from memory
+      }
+    } catch {
+      setIcloudStatus({ type: 'error', msg: 'Network error. Please try again.' })
+    }
+    setIcloudLoading(false)
   }
 
   const { firstDay, daysInMonth, year, month } = getDaysInMonth(currentMonth)
@@ -97,6 +132,75 @@ export default function CalendarPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* iCloud Calendar connect */}
+      <div style={{ marginBottom: '24px', padding: '20px 24px', borderRadius: '14px',
+        background: icloudConnected ? 'rgba(52,211,153,0.06)' : 'rgba(255,255,255,0.03)',
+        border: icloudConnected ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Apple logo */}
+          <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#1c1c1e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+            <Cloud size={22} color={icloudConnected ? '#34d399' : '#9CA3AF'} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {icloudConnected && <CheckCircle2 size={14} color="#34d399" />}
+              {icloudConnected ? 'iCloud Calendar Synced' : 'Connect iCloud Calendar'}
+            </div>
+            <p style={{ fontSize: '13px', color: '#9CA3AF', margin: 0 }}>
+              {icloudConnected
+                ? icloudStatus?.msg
+                : 'Sync your Apple Calendar using an app-specific password.'}
+            </p>
+          </div>
+          {!icloudConnected && (
+            <button
+              onClick={() => setShowIcloudForm(f => !f)}
+              style={{ fontSize: '13px', padding: '10px 20px', flexShrink: 0, cursor: 'pointer',
+                borderRadius: '8px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)',
+                color: 'white', background: 'rgba(255,255,255,0.07)' }}>
+              {showIcloudForm ? 'Cancel' : 'Connect'}
+            </button>
+          )}
+        </div>
+
+        {/* iCloud form */}
+        {showIcloudForm && (
+          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input
+              type="email"
+              placeholder="Apple ID (email)"
+              value={icloudId}
+              onChange={e => setIcloudId(e.target.value)}
+              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
+            />
+            <input
+              type="password"
+              placeholder="App-specific password (from appleid.apple.com)"
+              value={icloudPass}
+              onChange={e => setIcloudPass(e.target.value)}
+              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
+            />
+            <p style={{ fontSize: '12px', color: '#6B7280', margin: 0 }}>
+              Generate an app-specific password at <strong style={{ color: '#9CA3AF' }}>appleid.apple.com</strong> → Sign-In &amp; Security → App-Specific Passwords
+            </p>
+            {icloudStatus?.type === 'error' && (
+              <p style={{ fontSize: '13px', color: '#f87171', margin: 0 }}>⚠️ {icloudStatus.msg}</p>
+            )}
+            <button
+              onClick={syncIcloud}
+              disabled={icloudLoading || !icloudId || !icloudPass}
+              style={{ padding: '10px 20px', borderRadius: '8px', fontWeight: 600, fontSize: '14px',
+                border: 'none', cursor: icloudLoading ? 'wait' : 'pointer', color: 'white',
+                background: icloudLoading ? 'rgba(124,58,237,0.4)' : 'rgba(124,58,237,0.8)',
+                opacity: (!icloudId || !icloudPass) ? 0.5 : 1 }}>
+              {icloudLoading ? 'Syncing...' : 'Sync Calendar'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Calendar grid */}
