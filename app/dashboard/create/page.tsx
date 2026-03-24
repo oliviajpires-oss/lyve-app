@@ -32,10 +32,22 @@ interface BrandKit {
 }
 type LogoPos = 'tl' | 'tc' | 'tr' | 'bl' | 'br'
 
+interface TextEffects {
+  outline: boolean
+  outlineColor: string
+  outlineWidth: number
+  gradient: boolean
+  gradientColor2: string
+  letterSpacing: number
+  glow: boolean
+  allCaps: boolean
+}
 interface StyleConfig {
   bgType: 'photo' | 'illustrative'
   vibe: string
+  genre: string
   artistSize: number
+  textEffects: TextEffects
 }
 
 // ─── Font library ─────────────────────────────────────────────────────────────
@@ -95,6 +107,24 @@ const FONT_GROUPS = [
 const ALL_FONTS = FONT_GROUPS.flatMap(g => g.fonts)
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+const GENRES = [
+  { key: 'techno',     label: 'Techno',       desc: 'Dark, industrial, Berlin' },
+  { key: 'tech_house', label: 'Tech House',    desc: 'Moody warehouse, amber' },
+  { key: 'deep_house', label: 'Deep House',    desc: 'Intimate, jazz-club vibes' },
+  { key: 'house',      label: 'House',         desc: 'Soulful, colorful, joyful' },
+  { key: 'dnb',        label: 'Drum & Bass',   desc: 'Urban, kinetic, neon' },
+  { key: 'trance',     label: 'Trance',        desc: 'Cosmic, ethereal, celestial' },
+  { key: 'edm',        label: 'EDM / Festival',desc: 'Epic, massive, stadium' },
+  { key: 'afrobeats',  label: 'Afrobeats',     desc: 'Vibrant, golden, Lagos' },
+  { key: 'hiphop',     label: 'Hip-Hop',       desc: 'Urban, editorial, cultural' },
+  { key: 'reggaeton',  label: 'Reggaeton',     desc: 'Miami neon, tropical night' },
+  { key: 'amapiano',   label: 'Amapiano',      desc: 'South African golden energy' },
+  { key: 'dubstep',    label: 'Dubstep',       desc: 'Heavy, glitch, dark' },
+  { key: 'lofi',       label: 'Lo-Fi',         desc: 'Nostalgic, soft, grainy' },
+  { key: 'disco',      label: 'Disco',         desc: 'Glitter, 70s, Studio 54' },
+  { key: 'ambient',    label: 'Ambient',       desc: 'Minimal, vast, ethereal' },
+]
+
 const VIBES = [
   { key: 'tropical',    label: 'Tropical',       emoji: '🌴' },
   { key: 'underground', label: 'Underground',     emoji: '🖤' },
@@ -164,6 +194,7 @@ async function compositeFlyer({
   const ff = brand.fontFamily && brand.fontFamily !== 'custom'
     ? `"${brand.fontFamily}", sans-serif`
     : '"Helvetica Neue", Arial, sans-serif'
+  const te = style.textEffects
 
   // Layer 1: Background
   try {
@@ -249,19 +280,54 @@ async function compositeFlyer({
   ctx.fillText((details.venueName || 'VENUE NAME').toUpperCase(), width / 2, height * 0.052)
   ctx.restore()
 
-  // Artist name — auto-size to fit
+  // Artist name — auto-size + text effects
   let artistFontSize = Math.round(width * (style.artistSize / 100))
   ctx.save()
   ctx.font = `900 ${artistFontSize}px ${ff}`
   ctx.textAlign = 'center'
-  const artistText = details.artistName || 'ARTIST NAME'
-  while (ctx.measureText(artistText.toUpperCase()).width > width - pad * 2 && artistFontSize > 28) {
+  const artistRaw = details.artistName || 'ARTIST NAME'
+  const artistText = te.allCaps ? artistRaw.toUpperCase() : artistRaw
+  while (ctx.measureText(artistText).width > width - pad * 2 && artistFontSize > 28) {
     artistFontSize -= 2
     ctx.font = `900 ${artistFontSize}px ${ff}`
   }
-  ctx.fillStyle = brand.colors.artistName
-  ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 24
-  ctx.fillText(artistText.toUpperCase(), width / 2, height * 0.815)
+  // Letter spacing (approximate via character spacing)
+  const aX = width / 2
+  const aY = height * 0.815
+
+  // Glow effect
+  if (te.glow) {
+    ctx.save()
+    ctx.shadowColor = brand.colors.artistName
+    ctx.shadowBlur = 30
+    ctx.globalAlpha = 0.5
+    ctx.fillStyle = brand.colors.artistName
+    ctx.fillText(artistText, aX, aY)
+    ctx.restore()
+  }
+
+  // Gradient text
+  if (te.gradient) {
+    const tw = ctx.measureText(artistText).width
+    const grad = ctx.createLinearGradient(aX - tw/2, 0, aX + tw/2, 0)
+    grad.addColorStop(0, brand.colors.artistName)
+    grad.addColorStop(1, te.gradientColor2)
+    ctx.fillStyle = grad
+  } else {
+    ctx.fillStyle = brand.colors.artistName
+  }
+
+  ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 20
+
+  // Outline
+  if (te.outline) {
+    ctx.strokeStyle = te.outlineColor
+    ctx.lineWidth = te.outlineWidth * (width / 1080)
+    ctx.lineJoin = 'round'
+    ctx.strokeText(artistText, aX, aY)
+  }
+
+  ctx.fillText(artistText, aX, aY)
   ctx.shadowBlur = 0; ctx.restore()
 
   // Date
@@ -456,7 +522,12 @@ export default function CreatePage() {
     artistName: '', date: '', time: '', venueName: '', supportingArtists: '', ticketLink: ''
   })
   const [style, setStyle] = useState<StyleConfig>({
-    bgType: 'photo', vibe: 'tropical', artistSize: 14
+    bgType: 'photo', vibe: 'underground', genre: 'techno', artistSize: 14,
+    textEffects: {
+      outline: false, outlineColor: '#000000', outlineWidth: 2,
+      gradient: false, gradientColor2: '#FF3B80',
+      letterSpacing: 2, glow: false, allCaps: true,
+    }
   })
   const [brand, setBrand] = useState<BrandKit>({
     colors: {
@@ -482,9 +553,12 @@ export default function CreatePage() {
   const [customBgPrompt, setCustomBgPrompt] = useState<string | null>(null)
 
   const [generating, setGenerating] = useState(false)
+  const [variations, setVariations] = useState<{ story: string; feed: string }[]>([])
+  const [selectedVar, setSelectedVar] = useState(0)
   const [storyDataUrl, setStoryDataUrl] = useState<string | null>(null)
   const [feedDataUrl, setFeedDataUrl] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
+  const [genProgress, setGenProgress] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const flyerInputRef = useRef<HTMLInputElement>(null)
@@ -569,34 +643,50 @@ export default function CreatePage() {
 
   // ── Generation ───────────────────────────────────────────────────────────────
   const generate = useCallback(async () => {
-    setGenerating(true); setGenError(null)
+    setGenerating(true); setGenError(null); setVariations([]); setSelectedVar(0)
     try {
       await loadGoogleFont(brand.fontFamily)
-
-      const [storyBgRes, feedBgRes] = await Promise.all([
-        fetch('/api/generate-background', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'story', customPrompt: customBgPrompt })
-        }),
-        fetch('/api/generate-background', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'feed', customPrompt: customBgPrompt })
-        }),
-      ])
-
-      const [storyBlob, feedBlob] = await Promise.all([storyBgRes.blob(), feedBgRes.blob()])
-      const storyBgUrl = URL.createObjectURL(storyBlob)
-      const feedBgUrl  = URL.createObjectURL(feedBlob)
       const activePhoto = bgRemovedUrl || photoUrl
+      const bgParams = { bgType: style.bgType, vibe: style.vibe, genre: style.genre, customPrompt: customBgPrompt }
 
-      const [story, feed] = await Promise.all([
-        compositeFlyer({ bgUrl: storyBgUrl, photoUrl: activePhoto, details, style, brand, width: 1080, height: 1920 }),
-        compositeFlyer({ bgUrl: feedBgUrl,  photoUrl: activePhoto, details, style, brand, width: 1080, height: 1350 }),
-      ])
-      setStoryDataUrl(story); setFeedDataUrl(feed); setStep(4)
+      // Generate 3 background variations in parallel (story format)
+      setGenProgress('Generating 3 background variations…')
+      const bgReqs = await Promise.all([1,2,3].map(() =>
+        fetch('/api/generate-background', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...bgParams, format: 'story' })
+        })
+      ))
+      const bgBlobs = await Promise.all(bgReqs.map(r => r.blob()))
+      const bgUrls = bgBlobs.map(b => URL.createObjectURL(b))
+
+      setGenProgress('Compositing flyers…')
+      // Composite story + feed for each variation
+      const vars = await Promise.all(bgUrls.map(async (bgUrl) => {
+        const [feedBgRes] = await Promise.all([
+          fetch('/api/generate-background', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...bgParams, format: 'feed' })
+          })
+        ])
+        const feedBlob = await feedBgRes.blob()
+        const feedBgUrl = URL.createObjectURL(feedBlob)
+        const [story, feed] = await Promise.all([
+          compositeFlyer({ bgUrl, photoUrl: activePhoto, details, style, brand, width: 1080, height: 1920 }),
+          compositeFlyer({ bgUrl: feedBgUrl, photoUrl: activePhoto, details, style, brand, width: 1080, height: 1350 }),
+        ])
+        return { story, feed }
+      }))
+
+      setVariations(vars)
+      setStoryDataUrl(vars[0].story)
+      setFeedDataUrl(vars[0].feed)
+      setSelectedVar(0)
+      setStep(4)
     } catch (e) {
       console.error(e); setGenError('Generation failed. Please try again.')
     }
+    setGenProgress('')
     setGenerating(false)
   }, [style, details, brand, photoUrl, bgRemovedUrl, customBgPrompt])
 
@@ -782,6 +872,23 @@ export default function CreatePage() {
             </div>
           </div>
 
+          {/* Genre selector */}
+          <div style={{ marginBottom: '22px' }}>
+            <label style={lbl}>Music Genre <span style={{ textTransform: 'none', fontWeight: 400, color: '#555' }}>— drives the visual DNA</span></label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '6px' }}>
+              {GENRES.map(g => (
+                <button key={g.key} onClick={() => setStyle(p => ({ ...p, genre: g.key }))}
+                  style={{ padding: '10px 8px', borderRadius: '9px', cursor: 'pointer', textAlign: 'left',
+                    border: style.genre === g.key ? '1px solid rgba(196,160,255,0.5)' : '1px solid rgba(255,255,255,0.07)',
+                    background: style.genre === g.key ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.03)',
+                    transition: 'all 0.15s' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: style.genre === g.key ? '#C4A0FF' : '#D1D5DB', marginBottom: '2px' }}>{g.label}</div>
+                  <div style={{ fontSize: '10px', color: '#555', lineHeight: 1.3 }}>{g.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* BG type */}
           <div style={{ marginBottom: '20px' }}>
             <label style={lbl}>Background Type</label>
@@ -913,13 +1020,77 @@ export default function CreatePage() {
             </div>
           </div>
 
+          {/* Text effects */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <Type size={15} color="#C4A0FF" />
+              <h3 style={{ fontWeight: 700, fontSize: '14px' }}>Text Effects</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Toggles */}
+              {[
+                ['allCaps', 'ALL CAPS artist name'],
+                ['outline', 'Text outline / stroke'],
+                ['gradient', 'Gradient text (two-color)'],
+                ['glow', 'Text glow / halo'],
+              ].map(([key, label]) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: '#D1D5DB' }}>{label}</span>
+                  <button onClick={() => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, [key]: !p.textEffects[key as keyof TextEffects] } }))}
+                    style={{ width: 40, height: 22, borderRadius: '11px', border: 'none', cursor: 'pointer', position: 'relative',
+                      background: style.textEffects[key as keyof TextEffects] ? '#7C3AED' : 'rgba(255,255,255,0.1)',
+                      transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'white', position: 'absolute',
+                      top: 3, left: style.textEffects[key as keyof TextEffects] ? 21 : 3, transition: 'left 0.2s' }} />
+                  </button>
+                </div>
+              ))}
+              {/* Outline settings */}
+              {style.textEffects.outline && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
+                  <div>
+                    <div style={{ ...lbl }}>Outline Color</div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input type="color" value={style.textEffects.outlineColor}
+                        onChange={e => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, outlineColor: e.target.value } }))}
+                        style={{ width: 28, height: 28, borderRadius: '6px', border: 'none', cursor: 'pointer', padding: 0 }} />
+                      <input value={style.textEffects.outlineColor}
+                        onChange={e => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, outlineColor: e.target.value } }))}
+                        style={{ ...inp, flex: 1, padding: '5px 8px', fontSize: '11px' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ ...lbl }}>Width — {style.textEffects.outlineWidth}px</div>
+                    <input type="range" min={1} max={8} value={style.textEffects.outlineWidth}
+                      onChange={e => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, outlineWidth: Number(e.target.value) } }))}
+                      style={{ width: '100%', accentColor: '#7C3AED', marginTop: 6 }} />
+                  </div>
+                </div>
+              )}
+              {/* Gradient color 2 */}
+              {style.textEffects.gradient && (
+                <div style={{ padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
+                  <ColorRow label="Gradient end color" value={style.textEffects.gradientColor2}
+                    onChange={v => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, gradientColor2: v } }))} />
+                </div>
+              )}
+              {/* Letter spacing */}
+              <div>
+                <div style={{ ...lbl }}>Letter Spacing — {style.textEffects.letterSpacing}px</div>
+                <input type="range" min={-5} max={30} value={style.textEffects.letterSpacing}
+                  onChange={e => setStyle(p => ({ ...p, textEffects: { ...p.textEffects, letterSpacing: Number(e.target.value) } }))}
+                  style={{ width: '100%', accentColor: '#7C3AED' }} />
+              </div>
+            </div>
+          </div>
+
           {/* Summary */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <h3 style={{ fontWeight: 700, fontSize: '14px', marginBottom: '14px' }}>Ready to Generate</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#9CA3AF' }}>
-                <div>🎨 <strong style={{ color: 'white' }}>{style.bgType === 'photo' ? 'Photographic' : 'Illustrative'}</strong> · {VIBES.find(v => v.key === style.vibe)?.label}</div>
-                <div>🔤 <strong style={{ color: 'white' }}>{activeFontName || 'Default'}</strong></div>
+                <div>🎵 <strong style={{ color: 'white' }}>{GENRES.find(g => g.key === style.genre)?.label}</strong> · {style.bgType === 'photo' ? 'Photo' : 'Illustrative'} · {VIBES.find(v => v.key === style.vibe)?.label}</div>
+                <div>🔤 <strong style={{ color: 'white' }}>{activeFontName || 'Default'}</strong>{style.textEffects.outline ? ' + Outline' : ''}{style.textEffects.gradient ? ' + Gradient' : ''}{style.textEffects.glow ? ' + Glow' : ''}</div>
                 <div>🎨 Accent: <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: brand.colors.date, verticalAlign: 'middle', marginRight: 4 }} /><strong style={{ color: 'white' }}>{brand.colors.date}</strong></div>
                 {flyerAnalyzed && <div>✓ <strong style={{ color: '#34d399' }}>Brand matched from uploaded flyer</strong></div>}
                 {brand.venueLogoUrl && <div>🏢 Venue logo added</div>}
@@ -949,15 +1120,38 @@ export default function CreatePage() {
           </div>
 
           {generating && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', gap: '14px' }}>
               <Loader2 size={32} color="#C4A0FF" style={{ animation: 'spin 1s linear infinite' }} />
-              <div style={{ color: '#9CA3AF', fontSize: '14px' }}>Generating your flyers…</div>
-              <div style={{ color: '#555', fontSize: '12px' }}>AI is creating a custom background — ~15–30 seconds</div>
+              <div style={{ color: '#9CA3AF', fontSize: '14px' }}>{genProgress || 'Generating your flyers…'}</div>
+              <div style={{ color: '#555', fontSize: '12px' }}>Creating 3 unique variations — ~30–60 seconds</div>
             </div>
           )}
           {!generating && genError && (
             <div style={{ padding: '18px', borderRadius: '12px', background: 'rgba(239,68,68,0.07)',
               border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', marginBottom: '20px' }}>⚠️ {genError}</div>
+          )}
+          {!generating && variations.length > 1 && (
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ fontSize: '12px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, marginBottom: '10px' }}>
+                Pick a variation
+              </div>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {variations.map((v, i) => (
+                  <div key={i} onClick={() => { setSelectedVar(i); setStoryDataUrl(v.story); setFeedDataUrl(v.feed) }}
+                    style={{ cursor: 'pointer', position: 'relative' }}>
+                    <img src={v.story} alt={`variation ${i+1}`}
+                      style={{ width: 90, height: 160, objectFit: 'cover', borderRadius: '8px',
+                        border: selectedVar === i ? '2px solid #C4A0FF' : '2px solid transparent',
+                        opacity: selectedVar === i ? 1 : 0.5, transition: 'all 0.2s',
+                        boxShadow: selectedVar === i ? '0 0 16px rgba(196,160,255,0.4)' : 'none' }} />
+                    <div style={{ position: 'absolute', bottom: 5, left: 0, right: 0, textAlign: 'center',
+                      fontSize: '10px', fontWeight: 700, color: selectedVar === i ? '#C4A0FF' : '#555' }}>
+                      {selectedVar === i ? '✓ Selected' : `V${i+1}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
           {!generating && storyDataUrl && feedDataUrl && (
             <div style={{ display: 'flex', gap: '36px', flexWrap: 'wrap' }}>
