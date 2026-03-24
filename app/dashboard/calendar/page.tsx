@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { CheckCircle2, Cloud } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -13,7 +13,8 @@ export default function CalendarPage() {
   const [userId, setUserId] = useState('')
   const [gcalConnected] = useState(false)
   const [activeDate, setActiveDate] = useState<string | null>(null)
-  const [showIcloudForm, setShowIcloudForm] = useState(false)
+  const [showIcloudModal, setShowIcloudModal] = useState(false)
+  const [icloudStep, setIcloudStep] = useState(1)
   const [icloudId, setIcloudId] = useState('')
   const [icloudPass, setIcloudPass] = useState('')
   const [icloudStatus, setIcloudStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
@@ -77,7 +78,8 @@ export default function CalendarPage() {
         }
         setIcloudConnected(true)
         setIcloudStatus({ type: 'success', msg: data.message })
-        setShowIcloudForm(false)
+        setShowIcloudModal(false)
+        setIcloudStep(1)
         setIcloudPass('') // clear password from memory
       }
     } catch {
@@ -136,72 +138,193 @@ export default function CalendarPage() {
 
       {/* iCloud Calendar connect */}
       <div style={{ marginBottom: '24px', padding: '20px 24px', borderRadius: '14px',
-        background: icloudConnected ? 'rgba(52,211,153,0.06)' : 'rgba(255,255,255,0.03)',
-        border: icloudConnected ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+        background: icloudConnected ? 'rgba(52,211,153,0.06)' : 'linear-gradient(135deg, rgba(252,94,94,0.08), rgba(252,163,17,0.06))',
+        border: icloudConnected ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(252,94,94,0.2)',
+        boxShadow: icloudConnected ? 'none' : '0 0 30px rgba(252,94,94,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Apple logo */}
-          <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#1c1c1e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-            <Cloud size={22} color={icloudConnected ? '#34d399' : '#9CA3AF'} />
+          {/* Apple Calendar icon */}
+          <div style={{ width: 44, height: 44, borderRadius: '12px', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}>
+            <svg viewBox="0 0 44 44" width="44" height="44">
+              <defs>
+                <linearGradient id="calTop" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FF3B30"/>
+                  <stop offset="100%" stopColor="#FF6B35"/>
+                </linearGradient>
+              </defs>
+              <rect width="44" height="44" fill="white"/>
+              <rect width="44" height="13" fill="url(#calTop)"/>
+              {/* Ring hooks */}
+              <rect x="12" y="4" width="3" height="8" rx="1.5" fill="white" opacity="0.9"/>
+              <rect x="29" y="4" width="3" height="8" rx="1.5" fill="white" opacity="0.9"/>
+              {/* Date number */}
+              <text x="22" y="36" textAnchor="middle" fontSize="18" fontWeight="700" fill="#1C1C1E" fontFamily="-apple-system,sans-serif">
+                {new Date().getDate()}
+              </text>
+              {/* Day label */}
+              <text x="22" y="22" textAnchor="middle" fontSize="7" fontWeight="600" fill="#FF3B30" fontFamily="-apple-system,sans-serif" letterSpacing="0.5">
+                {['SUN','MON','TUE','WED','THU','FRI','SAT'][new Date().getDay()]}
+              </text>
+            </svg>
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, marginBottom: '4px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               {icloudConnected && <CheckCircle2 size={14} color="#34d399" />}
-              {icloudConnected ? 'iCloud Calendar Synced' : 'Connect iCloud Calendar'}
+              {icloudConnected ? 'Apple Calendar Synced' : 'Connect Apple Calendar'}
             </div>
             <p style={{ fontSize: '13px', color: '#9CA3AF', margin: 0 }}>
               {icloudConnected
                 ? icloudStatus?.msg
-                : 'Sync your Apple Calendar using an app-specific password.'}
+                : 'Sync iCloud so venues only see your real open dates.'}
             </p>
           </div>
           {!icloudConnected && (
             <button
-              onClick={() => setShowIcloudForm(f => !f)}
+              onClick={() => { setShowIcloudModal(true); setIcloudStep(1) }}
               style={{ fontSize: '13px', padding: '10px 20px', flexShrink: 0, cursor: 'pointer',
-                borderRadius: '8px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)',
-                color: 'white', background: 'rgba(255,255,255,0.07)' }}>
-              {showIcloudForm ? 'Cancel' : 'Connect'}
+                borderRadius: '8px', fontWeight: 600, border: 'none', color: 'white',
+                background: 'linear-gradient(135deg, #FF3B30, #FF6B35)',
+                boxShadow: '0 0 16px rgba(255,59,48,0.3)' }}>
+              Connect
             </button>
           )}
         </div>
-
-        {/* iCloud form */}
-        {showIcloudForm && (
-          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input
-              type="email"
-              placeholder="Apple ID (email)"
-              value={icloudId}
-              onChange={e => setIcloudId(e.target.value)}
-              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
-            />
-            <input
-              type="password"
-              placeholder="App-specific password (from appleid.apple.com)"
-              value={icloudPass}
-              onChange={e => setIcloudPass(e.target.value)}
-              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
-            />
-            <p style={{ fontSize: '12px', color: '#6B7280', margin: 0 }}>
-              Generate an app-specific password at <strong style={{ color: '#9CA3AF' }}>appleid.apple.com</strong> → Sign-In &amp; Security → App-Specific Passwords
-            </p>
-            {icloudStatus?.type === 'error' && (
-              <p style={{ fontSize: '13px', color: '#f87171', margin: 0 }}>⚠️ {icloudStatus.msg}</p>
-            )}
-            <button
-              onClick={syncIcloud}
-              disabled={icloudLoading || !icloudId || !icloudPass}
-              style={{ padding: '10px 20px', borderRadius: '8px', fontWeight: 600, fontSize: '14px',
-                border: 'none', cursor: icloudLoading ? 'wait' : 'pointer', color: 'white',
-                background: icloudLoading ? 'rgba(124,58,237,0.4)' : 'rgba(124,58,237,0.8)',
-                opacity: (!icloudId || !icloudPass) ? 0.5 : 1 }}>
-              {icloudLoading ? 'Syncing...' : 'Sync Calendar'}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* iCloud Modal */}
+      {showIcloudModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowIcloudModal(false)}>
+          <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px',
+            padding: '32px', maxWidth: '440px', width: '90%', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Modal header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '13px', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 10px rgba(0,0,0,0.4)' }}>
+                <svg viewBox="0 0 44 44" width="48" height="48">
+                  <defs>
+                    <linearGradient id="calTop2" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FF3B30"/>
+                      <stop offset="100%" stopColor="#FF6B35"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="44" height="44" fill="white"/>
+                  <rect width="44" height="13" fill="url(#calTop2)"/>
+                  <rect x="12" y="4" width="3" height="8" rx="1.5" fill="white" opacity="0.9"/>
+                  <rect x="29" y="4" width="3" height="8" rx="1.5" fill="white" opacity="0.9"/>
+                  <text x="22" y="36" textAnchor="middle" fontSize="18" fontWeight="700" fill="#1C1C1E" fontFamily="-apple-system,sans-serif">{new Date().getDate()}</text>
+                  <text x="22" y="22" textAnchor="middle" fontSize="7" fontWeight="600" fill="#FF3B30" fontFamily="-apple-system,sans-serif" letterSpacing="0.5">{['SUN','MON','TUE','WED','THU','FRI','SAT'][new Date().getDay()]}</text>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '17px' }}>Connect Apple Calendar</div>
+                <div style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '2px' }}>Secure iCloud sync in 3 steps</div>
+              </div>
+              <button onClick={() => setShowIcloudModal(false)}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Step indicators */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+              {[1,2,3].map(s => (
+                <div key={s} style={{ flex: 1, height: '3px', borderRadius: '2px',
+                  background: s <= icloudStep ? 'linear-gradient(90deg,#FF3B30,#FF6B35)' : 'rgba(255,255,255,0.1)' }}/>
+              ))}
+            </div>
+
+            {/* Step 1 */}
+            {icloudStep === 1 && (
+              <div>
+                <div style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Step 1 of 3</div>
+                <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px' }}>Generate an App Password</div>
+                <p style={{ fontSize: '14px', color: '#9CA3AF', lineHeight: 1.6, marginBottom: '20px' }}>
+                  Apple requires an <strong style={{ color: 'white' }}>app-specific password</strong> for third-party calendar access. This is a separate token — not your main Apple ID password — and can be revoked anytime.
+                </p>
+                <button
+                  onClick={() => { window.open('https://appleid.apple.com/account/manage', '_blank'); setIcloudStep(2) }}
+                  style={{ width: '100%', padding: '13px', borderRadius: '10px', fontWeight: 700, fontSize: '15px',
+                    border: 'none', cursor: 'pointer', color: 'white',
+                    background: 'linear-gradient(135deg, #FF3B30, #FF6B35)',
+                    boxShadow: '0 0 20px rgba(255,59,48,0.3)', marginBottom: '10px' }}>
+                  Open Apple ID → App-Specific Passwords
+                </button>
+                <p style={{ fontSize: '12px', color: '#6B7280', textAlign: 'center', margin: 0 }}>Opens appleid.apple.com in a new tab</p>
+              </div>
+            )}
+
+            {/* Step 2 */}
+            {icloudStep === 2 && (
+              <div>
+                <div style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Step 2 of 3</div>
+                <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '12px' }}>Create the password</div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                  {[
+                    ['1.', 'Sign in at appleid.apple.com'],
+                    ['2.', 'Go to Sign-In & Security'],
+                    ['3.', 'Click App-Specific Passwords'],
+                    ['4.', 'Click + and name it "Lyve"'],
+                    ['5.', 'Copy the generated password'],
+                  ].map(([num, text]) => (
+                    <div key={num} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '14px', color: '#D1D5DB' }}>
+                      <span style={{ color: '#FF3B30', fontWeight: 700, minWidth: '18px' }}>{num}</span>
+                      <span>{text}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setIcloudStep(1)} style={{ flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', color: '#9CA3AF', background: 'transparent' }}>← Back</button>
+                  <button onClick={() => setIcloudStep(3)} style={{ flex: 2, padding: '12px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer', color: 'white', background: 'linear-gradient(135deg, #FF3B30, #FF6B35)' }}>I have the password →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 */}
+            {icloudStep === 3 && (
+              <div>
+                <div style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Step 3 of 3</div>
+                <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '16px' }}>Enter your credentials</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                  <input
+                    type="email"
+                    placeholder="Apple ID (your iCloud email)"
+                    value={icloudId}
+                    onChange={e => setIcloudId(e.target.value)}
+                    style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
+                  />
+                  <input
+                    type="password"
+                    placeholder="App-specific password (xxxx-xxxx-xxxx-xxxx)"
+                    value={icloudPass}
+                    onChange={e => setIcloudPass(e.target.value)}
+                    style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none' }}
+                  />
+                </div>
+                {icloudStatus?.type === 'error' && (
+                  <p style={{ fontSize: '13px', color: '#f87171', marginBottom: '12px' }}>⚠️ {icloudStatus.msg}</p>
+                )}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setIcloudStep(2)} style={{ flex: 1, padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', color: '#9CA3AF', background: 'transparent' }}>← Back</button>
+                  <button
+                    onClick={syncIcloud}
+                    disabled={icloudLoading || !icloudId || !icloudPass}
+                    style={{ flex: 2, padding: '12px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
+                      border: 'none', cursor: icloudLoading ? 'wait' : 'pointer', color: 'white',
+                      background: icloudLoading ? 'rgba(255,59,48,0.4)' : 'linear-gradient(135deg, #FF3B30, #FF6B35)',
+                      opacity: (!icloudId || !icloudPass) ? 0.5 : 1 }}>
+                    {icloudLoading ? 'Syncing...' : 'Sync My Calendar ✓'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '12px', color: '#6B7280', textAlign: 'center', marginTop: '12px', marginBottom: 0 }}>
+                  🔒 Your password is never stored — only your busy dates are saved
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Calendar grid */}
       <div className="card">
