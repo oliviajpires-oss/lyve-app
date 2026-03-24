@@ -1,6 +1,6 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
-import { Download, Upload, Wand2, ChevronRight, ChevronLeft, X, Check, Loader2, RefreshCw } from 'lucide-react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { Download, Upload, Wand2, ChevronRight, ChevronLeft, X, Check, Loader2, RefreshCw, Palette, Type, Image as ImageIcon } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface EventDetails {
@@ -11,38 +11,139 @@ interface EventDetails {
   supportingArtists: string
   ticketLink: string
 }
+interface BrandColors {
+  artistName: string
+  venueName: string
+  date: string
+  supporting: string
+  overlay: string
+  overlayOpacity: number
+}
+interface BrandKit {
+  colors: BrandColors
+  fontFamily: string
+  customFontName: string | null
+  venueLogoUrl: string | null
+  venueLogoPos: LogoPos
+  venueLogoSize: number
+  artistLogoUrl: string | null
+  artistLogoPos: LogoPos
+  artistLogoSize: number
+}
+type LogoPos = 'tl' | 'tc' | 'tr' | 'bl' | 'br'
 
 interface StyleConfig {
   bgType: 'photo' | 'illustrative'
   vibe: string
-  accentColor: string
-  textColor: string
-  fontStyle: 'bold' | 'clean' | 'elegant'
   artistSize: number
 }
 
+// ─── Font library ─────────────────────────────────────────────────────────────
+const FONT_GROUPS = [
+  {
+    label: 'Bold & Display',
+    fonts: [
+      { name: 'Bebas Neue', weight: '400' },
+      { name: 'Anton', weight: '400' },
+      { name: 'Oswald', weight: '700' },
+      { name: 'Fjalla One', weight: '400' },
+      { name: 'Bungee', weight: '400' },
+      { name: 'Black Han Sans', weight: '400' },
+    ]
+  },
+  {
+    label: 'Condensed',
+    fonts: [
+      { name: 'Barlow Condensed', weight: '700' },
+      { name: 'Roboto Condensed', weight: '700' },
+      { name: 'DM Sans', weight: '800' },
+      { name: 'Kanit', weight: '700' },
+      { name: 'Exo 2', weight: '800' },
+    ]
+  },
+  {
+    label: 'Modern Clean',
+    fonts: [
+      { name: 'Montserrat', weight: '800' },
+      { name: 'Raleway', weight: '800' },
+      { name: 'Poppins', weight: '800' },
+      { name: 'Nunito', weight: '900' },
+      { name: 'Manrope', weight: '800' },
+    ]
+  },
+  {
+    label: 'Elegant / Serif',
+    fonts: [
+      { name: 'Playfair Display', weight: '900' },
+      { name: 'Cormorant Garamond', weight: '700' },
+      { name: 'Cinzel', weight: '700' },
+      { name: 'IM Fell English', weight: '400' },
+      { name: 'Libre Baskerville', weight: '700' },
+    ]
+  },
+  {
+    label: 'Script',
+    fonts: [
+      { name: 'Pacifico', weight: '400' },
+      { name: 'Dancing Script', weight: '700' },
+      { name: 'Sacramento', weight: '400' },
+      { name: 'Great Vibes', weight: '400' },
+      { name: 'Satisfy', weight: '400' },
+    ]
+  },
+]
+const ALL_FONTS = FONT_GROUPS.flatMap(g => g.fonts)
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VIBES = [
-  { key: 'tropical',    label: 'Tropical & Vibrant',  emoji: '🌴' },
-  { key: 'underground', label: 'Dark Underground',     emoji: '🖤' },
-  { key: 'neon',        label: 'Neon / Cyber',         emoji: '💜' },
-  { key: 'golden',      label: 'Golden Hour',          emoji: '✨' },
-  { key: 'festival',    label: 'Festival & Epic',      emoji: '🎪' },
-  { key: 'editorial',   label: 'Minimal Editorial',    emoji: '◻️' },
+  { key: 'tropical',    label: 'Tropical',       emoji: '🌴' },
+  { key: 'underground', label: 'Underground',     emoji: '🖤' },
+  { key: 'neon',        label: 'Neon / Cyber',   emoji: '💜' },
+  { key: 'golden',      label: 'Golden Hour',     emoji: '✨' },
+  { key: 'festival',    label: 'Festival',        emoji: '🎪' },
+  { key: 'editorial',   label: 'Editorial',       emoji: '◻️' },
 ]
+const LOGO_POSITIONS: { key: LogoPos; label: string }[] = [
+  { key: 'tl', label: '↖' }, { key: 'tc', label: '↑' }, { key: 'tr', label: '↗' },
+  { key: 'bl', label: '↙' }, { key: 'br', label: '↘' },
+]
+const STEPS = ['Details', 'Photo', 'Style', 'Brand Kit', 'Generate']
 
-const ACCENT_PRESETS = ['#FFD700', '#FF3B80', '#00F5FF', '#FF6B35', '#FFFFFF', '#34D399', '#C4A0FF', '#FF4500']
+// ─── Font loader ──────────────────────────────────────────────────────────────
+async function loadGoogleFont(fontName: string) {
+  if (fontName === 'custom' || !fontName) return
+  try {
+    const loaded = document.fonts.check(`900 16px "${fontName}"`)
+    if (loaded) return
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName).replace(/%20/g, '+')}:wght@400;700;900&display=swap`
+    document.head.appendChild(link)
+    await document.fonts.ready
+    await document.fonts.load(`900 16px "${fontName}"`)
+  } catch { /* fallback to system font */ }
+}
 
-const STEPS = ['Details', 'Photo', 'Style', 'Generate']
+// ─── Canvas compositor ────────────────────────────────────────────────────────
+function logoXY(pos: LogoPos, w: number, h: number, size: number, pad: number) {
+  const positions: Record<LogoPos, [number, number]> = {
+    tl: [pad, pad],
+    tc: [(w - size) / 2, pad],
+    tr: [w - size - pad, pad],
+    bl: [pad, h - size - pad],
+    br: [w - size - pad, h - size - pad],
+  }
+  return positions[pos]
+}
 
-// ─── Canvas Compositor ────────────────────────────────────────────────────────
 async function compositeFlyer({
-  bgUrl, photoUrl, details, style, width, height
+  bgUrl, photoUrl, details, style, brand, width, height
 }: {
   bgUrl: string
   photoUrl: string | null
   details: EventDetails
   style: StyleConfig
+  brand: BrandKit
   width: number
   height: number
 }): Promise<string> {
@@ -60,195 +161,292 @@ async function compositeFlyer({
       img.src = src
     })
 
-  // ── Layer 1: Background ───────────────────────────────────────────────────
+  const ff = brand.fontFamily && brand.fontFamily !== 'custom'
+    ? `"${brand.fontFamily}", sans-serif`
+    : '"Helvetica Neue", Arial, sans-serif'
+
+  // Layer 1: Background
   try {
     const bgImg = await loadImg(bgUrl)
-    // Cover-fit
     const scale = Math.max(width / bgImg.width, height / bgImg.height)
-    const bw = bgImg.width * scale
-    const bh = bgImg.height * scale
-    const bx = (width - bw) / 2
-    const by = (height - bh) / 2
-    ctx.drawImage(bgImg, bx, by, bw, bh)
+    const bw = bgImg.width * scale, bh = bgImg.height * scale
+    ctx.drawImage(bgImg, (width - bw) / 2, (height - bh) / 2, bw, bh)
   } catch {
-    // fallback gradient
-    const grad = ctx.createLinearGradient(0, 0, width, height)
-    grad.addColorStop(0, '#1a0533')
-    grad.addColorStop(1, '#0f0f1a')
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, width, height)
+    const g = ctx.createLinearGradient(0, 0, width, height)
+    g.addColorStop(0, '#1a0533'); g.addColorStop(1, '#0f0f1a')
+    ctx.fillStyle = g; ctx.fillRect(0, 0, width, height)
   }
 
-  // ── Layer 2: Color grade overlay (mood) ───────────────────────────────────
-  const moodGrad = ctx.createLinearGradient(0, 0, 0, height)
-  moodGrad.addColorStop(0, 'rgba(0,0,0,0.35)')
-  moodGrad.addColorStop(0.5, 'rgba(0,0,0,0.1)')
-  moodGrad.addColorStop(1, 'rgba(0,0,0,0.7)')
-  ctx.fillStyle = moodGrad
+  // Layer 2: Custom overlay
+  ctx.fillStyle = brand.colors.overlay
+  ctx.globalAlpha = brand.colors.overlayOpacity
   ctx.fillRect(0, 0, width, height)
+  ctx.globalAlpha = 1
 
-  // ── Layer 3: DJ Photo ─────────────────────────────────────────────────────
+  // Layer 3: Mood gradient
+  const moodGrad = ctx.createLinearGradient(0, 0, 0, height)
+  moodGrad.addColorStop(0, 'rgba(0,0,0,0.3)')
+  moodGrad.addColorStop(0.5, 'rgba(0,0,0,0.05)')
+  moodGrad.addColorStop(1, 'rgba(0,0,0,0.75)')
+  ctx.fillStyle = moodGrad; ctx.fillRect(0, 0, width, height)
+
+  // Layer 4: DJ Photo
   if (photoUrl) {
     try {
       const photo = await loadImg(photoUrl)
-      const photoH = height * 0.72
+      const photoH = height * 0.73
       const photoW = (photo.width / photo.height) * photoH
       const px = (width - photoW) / 2
-      const py = height - photoH - (height * 0.06)
+      const py = height - photoH - height * 0.05
 
-      // Glow / halo effect
-      ctx.save()
-      ctx.globalAlpha = 0.22
-      ctx.filter = 'blur(40px)'
+      // Glow
+      ctx.save(); ctx.globalAlpha = 0.2; ctx.filter = 'blur(40px)'
       ctx.drawImage(photo, px - 30, py - 30, photoW + 60, photoH + 60)
-      ctx.filter = 'none'
-      ctx.globalAlpha = 1
-      ctx.restore()
+      ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.restore()
 
-      // Slight accent tint on the photo base (colored glow)
-      ctx.save()
-      ctx.globalAlpha = 0.12
-      ctx.fillStyle = style.accentColor
-      ctx.filter = `blur(60px)`
-      ctx.drawImage(photo, px, py, photoW, photoH)
-      ctx.filter = 'none'
-      ctx.globalAlpha = 1
-      ctx.restore()
-
-      // The actual photo
       ctx.drawImage(photo, px, py, photoW, photoH)
 
-      // Fade bottom of photo into background
-      const fadeGrad = ctx.createLinearGradient(0, py + photoH * 0.6, 0, py + photoH)
-      fadeGrad.addColorStop(0, 'rgba(0,0,0,0)')
-      fadeGrad.addColorStop(1, 'rgba(0,0,0,0.85)')
-      ctx.fillStyle = fadeGrad
-      ctx.fillRect(px - 20, py + photoH * 0.6, photoW + 40, photoH * 0.4 + 20)
-    } catch { /* skip photo if load fails */ }
+      // Bottom fade
+      const fade = ctx.createLinearGradient(0, py + photoH * 0.58, 0, py + photoH)
+      fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(1, 'rgba(0,0,0,0.88)')
+      ctx.fillStyle = fade; ctx.fillRect(px - 20, py + photoH * 0.58, photoW + 40, photoH * 0.42 + 20)
+    } catch { /* skip */ }
   }
 
-  // ── Layer 4: Vignette ─────────────────────────────────────────────────────
+  // Layer 4b: Artist logo (if no photo or as overlay)
+  if (brand.artistLogoUrl) {
+    try {
+      const logo = await loadImg(brand.artistLogoUrl)
+      const size = (width * brand.artistLogoSize) / 100
+      const [lx, ly] = logoXY(brand.artistLogoPos, width, height, size, width * 0.05)
+      ctx.drawImage(logo, lx, ly, size, (logo.height / logo.width) * size)
+    } catch { /* skip */ }
+  }
+
+  // Layer 5: Vignette
   const vig = ctx.createRadialGradient(width/2, height/2, height*0.25, width/2, height/2, height*0.85)
-  vig.addColorStop(0, 'rgba(0,0,0,0)')
-  vig.addColorStop(1, 'rgba(0,0,0,0.55)')
-  ctx.fillStyle = vig
-  ctx.fillRect(0, 0, width, height)
+  vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,0.5)')
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, width, height)
 
-  // ── Layer 5: Bottom gradient for text ─────────────────────────────────────
-  const textGrad = ctx.createLinearGradient(0, height * 0.62, 0, height)
-  textGrad.addColorStop(0, 'rgba(0,0,0,0)')
-  textGrad.addColorStop(0.4, 'rgba(0,0,0,0.6)')
-  textGrad.addColorStop(1, 'rgba(0,0,0,0.92)')
-  ctx.fillStyle = textGrad
-  ctx.fillRect(0, height * 0.62, width, height * 0.38)
+  // Layer 6: Text gradient
+  const tg = ctx.createLinearGradient(0, height * 0.6, 0, height)
+  tg.addColorStop(0, 'rgba(0,0,0,0)'); tg.addColorStop(0.4, 'rgba(0,0,0,0.55)'); tg.addColorStop(1, 'rgba(0,0,0,0.92)')
+  ctx.fillStyle = tg; ctx.fillRect(0, height * 0.6, width, height * 0.4)
 
-  // ── Layer 6: Accent line at bottom ────────────────────────────────────────
-  const accentGrad = ctx.createLinearGradient(0, 0, width, 0)
-  accentGrad.addColorStop(0, 'rgba(0,0,0,0)')
-  accentGrad.addColorStop(0.5, style.accentColor)
-  accentGrad.addColorStop(1, 'rgba(0,0,0,0)')
-  ctx.fillStyle = accentGrad
-  ctx.fillRect(0, height - 4, width, 4)
+  // Layer 7: Accent line
+  const al = ctx.createLinearGradient(0, 0, width, 0)
+  al.addColorStop(0, 'rgba(0,0,0,0)'); al.addColorStop(0.5, brand.colors.date); al.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = al; ctx.fillRect(0, height - 4, width, 4)
 
-  // ── Layer 7: Typography ───────────────────────────────────────────────────
-  const textPad = width * 0.07
-  const fontMap = {
-    bold:    'Impact, "Arial Black", sans-serif',
-    clean:   '"Helvetica Neue", Arial, sans-serif',
-    elegant: 'Georgia, "Times New Roman", serif',
-  }
-  const ff = fontMap[style.fontStyle]
-  const tc = style.textColor
+  // Layer 8: Typography
+  const pad = width * 0.07
 
-  // Venue name (top)
+  // Venue name
   ctx.save()
-  ctx.font = `600 ${Math.round(width * 0.034)}px ${ff}`
-  ctx.fillStyle = tc
-  ctx.globalAlpha = 0.7
-  ctx.letterSpacing = `${width * 0.008}px`
-  ctx.textAlign = 'center'
-  ctx.fillText(details.venueName.toUpperCase() || 'VENUE NAME', width / 2, height * 0.052)
+  ctx.font = `600 ${Math.round(width * 0.033)}px ${ff}`
+  ctx.fillStyle = brand.colors.venueName
+  ctx.globalAlpha = 0.8; ctx.textAlign = 'center'
+  ctx.fillText((details.venueName || 'VENUE NAME').toUpperCase(), width / 2, height * 0.052)
   ctx.restore()
 
-  // Artist name — main headline
-  const artistFontSize = Math.round(width * (style.artistSize / 100))
+  // Artist name — auto-size to fit
+  let artistFontSize = Math.round(width * (style.artistSize / 100))
   ctx.save()
-  ctx.font = `${style.fontStyle === 'bold' ? '900' : style.fontStyle === 'elegant' ? '700' : '800'} ${artistFontSize}px ${ff}`
+  ctx.font = `900 ${artistFontSize}px ${ff}`
   ctx.textAlign = 'center'
-  ctx.fillStyle = tc
-  ctx.shadowColor = 'rgba(0,0,0,0.9)'
-  ctx.shadowBlur = 20
-
-  // Fit text to canvas width
-  let fontSize = artistFontSize
-  while (ctx.measureText(details.artistName.toUpperCase() || 'ARTIST').width > width - textPad * 2 && fontSize > 30) {
-    fontSize -= 2
-    ctx.font = `${style.fontStyle === 'bold' ? '900' : '800'} ${fontSize}px ${ff}`
+  const artistText = details.artistName || 'ARTIST NAME'
+  while (ctx.measureText(artistText.toUpperCase()).width > width - pad * 2 && artistFontSize > 28) {
+    artistFontSize -= 2
+    ctx.font = `900 ${artistFontSize}px ${ff}`
   }
-  ctx.font = `${style.fontStyle === 'bold' ? '900' : '800'} ${fontSize}px ${ff}`
-  if (style.fontStyle === 'bold') {
-    ctx.fillStyle = tc
-    ctx.fillText((details.artistName || 'ARTIST NAME').toUpperCase(), width / 2, height * 0.81)
-  } else {
-    ctx.fillText(details.artistName || 'Artist Name', width / 2, height * 0.81)
-  }
-  ctx.shadowBlur = 0
-  ctx.restore()
+  ctx.fillStyle = brand.colors.artistName
+  ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 24
+  ctx.fillText(artistText.toUpperCase(), width / 2, height * 0.815)
+  ctx.shadowBlur = 0; ctx.restore()
 
-  // Date in accent color
+  // Date
   if (details.date) {
     const dateStr = new Date(details.date + 'T12:00').toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric'
     }).toUpperCase()
-    const dateLine = details.time ? `${dateStr}  ·  ${details.time.toUpperCase()}` : dateStr
+    const line = details.time ? `${dateStr}  ·  ${details.time.toUpperCase()}` : dateStr
     ctx.save()
-    ctx.font = `700 ${Math.round(width * 0.038)}px ${ff}`
-    ctx.textAlign = 'center'
-    ctx.fillStyle = style.accentColor
-    ctx.shadowColor = 'rgba(0,0,0,0.8)'
-    ctx.shadowBlur = 12
-    ctx.fillText(dateLine, width / 2, height * 0.867)
-    ctx.shadowBlur = 0
-    ctx.restore()
+    ctx.font = `700 ${Math.round(width * 0.037)}px ${ff}`
+    ctx.textAlign = 'center'; ctx.fillStyle = brand.colors.date
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 10
+    ctx.fillText(line, width / 2, height * 0.868)
+    ctx.shadowBlur = 0; ctx.restore()
   }
 
   // Supporting artists
   const supporting = details.supportingArtists.trim()
-    ? details.supportingArtists.split(',').map(s => s.trim()).filter(Boolean)
-    : []
+    ? details.supportingArtists.split(',').map(s => s.trim()).filter(Boolean) : []
   if (supporting.length > 0) {
     ctx.save()
-    ctx.font = `500 ${Math.round(width * 0.028)}px ${ff}`
-    ctx.textAlign = 'center'
-    ctx.fillStyle = tc
-    ctx.globalAlpha = 0.65
-    ctx.fillText(supporting.join('  ·  '), width / 2, height * 0.908)
+    ctx.font = `500 ${Math.round(width * 0.027)}px ${ff}`
+    ctx.textAlign = 'center'; ctx.fillStyle = brand.colors.supporting; ctx.globalAlpha = 0.75
+    ctx.fillText(supporting.join('  ·  '), width / 2, height * 0.909)
     ctx.restore()
   }
 
   // Ticket link
   if (details.ticketLink) {
     ctx.save()
-    ctx.font = `400 ${Math.round(width * 0.022)}px ${ff}`
-    ctx.textAlign = 'center'
-    ctx.fillStyle = tc
-    ctx.globalAlpha = 0.4
+    ctx.font = `400 ${Math.round(width * 0.021)}px ${ff}`
+    ctx.textAlign = 'center'; ctx.fillStyle = brand.colors.supporting; ctx.globalAlpha = 0.4
     ctx.fillText(details.ticketLink.replace(/^https?:\/\//i, ''), width / 2, height * 0.945)
     ctx.restore()
   }
 
-  // ── Layer 8: Film grain ───────────────────────────────────────────────────
-  const imageData = ctx.getImageData(0, 0, width, height)
-  const d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const n = (Math.random() - 0.5) * 18
-    d[i]     = Math.min(255, Math.max(0, d[i]     + n))
-    d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + n))
-    d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + n))
+  // Layer 9: Venue logo
+  if (brand.venueLogoUrl) {
+    try {
+      const logo = await loadImg(brand.venueLogoUrl)
+      const size = (width * brand.venueLogoSize) / 100
+      const [lx, ly] = logoXY(brand.venueLogoPos, width, height, size, width * 0.05)
+      ctx.drawImage(logo, lx, ly, size, (logo.height / logo.width) * size)
+    } catch { /* skip */ }
   }
-  ctx.putImageData(imageData, 0, 0)
+
+  // Layer 10: Film grain
+  const imgData = ctx.getImageData(0, 0, width, height)
+  const d = imgData.data
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * 16
+    d[i] = Math.min(255, Math.max(0, d[i] + n))
+    d[i+1] = Math.min(255, Math.max(0, d[i+1] + n))
+    d[i+2] = Math.min(255, Math.max(0, d[i+2] + n))
+  }
+  ctx.putImageData(imgData, 0, 0)
 
   return canvas.toDataURL('image/jpeg', 0.95)
+}
+
+// ─── Shared input styles ──────────────────────────────────────────────────────
+const inp: React.CSSProperties = {
+  width: '100%', padding: '10px 13px', borderRadius: '9px',
+  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+  color: 'white', fontSize: '13px', outline: 'none', boxSizing: 'border-box'
+}
+const lbl: React.CSSProperties = {
+  fontSize: '11px', fontWeight: 600, color: '#9CA3AF',
+  textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px', display: 'block'
+}
+
+// ─── Logo uploader sub-component ─────────────────────────────────────────────
+function LogoUploader({
+  label, url, pos, size,
+  onUpload, onPos, onSize, onClear
+}: {
+  label: string
+  url: string | null
+  pos: LogoPos
+  size: number
+  onUpload: (f: File) => void
+  onPos: (p: LogoPos) => void
+  onSize: (s: number) => void
+  onClear: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  return (
+    <div style={{ padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 600 }}>{label}</span>
+        {url
+          ? <button onClick={onClear} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '11px' }}>Remove</button>
+          : <button onClick={() => ref.current?.click()}
+              style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', border: 'none',
+                cursor: 'pointer', color: 'white', background: 'rgba(124,58,237,0.6)' }}>Upload PNG</button>
+        }
+        <input ref={ref} type="file" accept="image/*" style={{ display: 'none' }}
+          onChange={e => e.target.files?.[0] && onUpload(e.target.files[0])} />
+      </div>
+      {url && (
+        <>
+          <img src={url} alt={label} style={{ width: '100%', maxHeight: 60, objectFit: 'contain', marginBottom: '10px',
+            background: 'repeating-conic-gradient(#1a1a1a 0% 25%,#111 0% 50%) 0 0/12px 12px', borderRadius: '6px' }} />
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ ...lbl, marginBottom: '6px' }}>Position</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '4px' }}>
+              {LOGO_POSITIONS.map(p => (
+                <button key={p.key} onClick={() => onPos(p.key)}
+                  style={{ padding: '6px', borderRadius: '6px', border: pos === p.key ? '1px solid rgba(196,160,255,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                    background: pos === p.key ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer', color: pos === p.key ? '#C4A0FF' : '#555', fontSize: '14px' }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ ...lbl }}>Size — {size}%</div>
+            <input type="range" min={8} max={50} value={size} onChange={e => onSize(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#7C3AED' }} />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Color row ────────────────────────────────────────────────────────────────
+function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <input type="color" value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: 30, height: 30, borderRadius: '6px', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '2px' }}>{label}</div>
+        <input value={value} onChange={e => onChange(e.target.value)}
+          style={{ ...inp, padding: '5px 10px', fontSize: '12px' }} />
+      </div>
+    </div>
+  )
+}
+
+// ─── Font picker ──────────────────────────────────────────────────────────────
+function FontPicker({ value, onChange }: { value: string; onChange: (f: string) => void }) {
+  const [loaded, setLoaded] = useState<Set<string>>(new Set())
+  const [activeGroup, setActiveGroup] = useState(0)
+
+  const preloadFont = async (fontName: string) => {
+    if (loaded.has(fontName)) return
+    await loadGoogleFont(fontName)
+    setLoaded(prev => new Set([...prev, fontName]))
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        {FONT_GROUPS.map((g, i) => (
+          <button key={g.label} onClick={() => setActiveGroup(i)}
+            style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+              border: activeGroup === i ? '1px solid rgba(196,160,255,0.4)' : '1px solid rgba(255,255,255,0.07)',
+              background: activeGroup === i ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.03)',
+              color: activeGroup === i ? '#C4A0FF' : '#6B7280' }}>
+            {g.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: 200, overflowY: 'auto' }}>
+        {FONT_GROUPS[activeGroup].fonts.map(f => (
+          <button key={f.name}
+            onMouseEnter={() => preloadFont(f.name)}
+            onClick={() => { preloadFont(f.name); onChange(f.name) }}
+            style={{ padding: '10px 14px', borderRadius: '8px', border: value === f.name ? '1px solid rgba(196,160,255,0.45)' : '1px solid rgba(255,255,255,0.06)',
+              background: value === f.name ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.02)',
+              cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
+            <span style={{ fontFamily: loaded.has(f.name) ? `"${f.name}", sans-serif` : 'sans-serif',
+              fontSize: '16px', fontWeight: f.weight as React.CSSProperties['fontWeight'],
+              color: value === f.name ? '#C4A0FF' : 'white' }}>
+              {f.name}
+            </span>
+            {value === f.name && <span style={{ float: 'right', fontSize: '11px', color: '#7C3AED' }}>✓ Selected</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -258,79 +456,52 @@ export default function CreatePage() {
     artistName: '', date: '', time: '', venueName: '', supportingArtists: '', ticketLink: ''
   })
   const [style, setStyle] = useState<StyleConfig>({
-    bgType: 'photo', vibe: 'tropical', accentColor: '#FFD700',
-    textColor: '#FFFFFF', fontStyle: 'bold', artistSize: 14
+    bgType: 'photo', vibe: 'tropical', artistSize: 14
   })
+  const [brand, setBrand] = useState<BrandKit>({
+    colors: {
+      artistName: '#FFFFFF', venueName: '#FFFFFF',
+      date: '#FFD700', supporting: '#FFFFFF', overlay: '#000000', overlayOpacity: 0
+    },
+    fontFamily: 'Bebas Neue',
+    customFontName: null,
+    venueLogoUrl: null, venueLogoPos: 'tr', venueLogoSize: 20,
+    artistLogoUrl: null, artistLogoPos: 'tl', artistLogoSize: 18,
+  })
+
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [bgRemovedUrl, setBgRemovedUrl] = useState<string | null>(null)
   const [removingBg, setRemovingBg] = useState(false)
 
-  // Flyer analysis state
   const [flyerFile, setFlyerFile] = useState<File | null>(null)
   const [flyerPreview, setFlyerPreview] = useState<string | null>(null)
   const [analyzingFlyer, setAnalyzingFlyer] = useState(false)
   const [flyerAnalyzed, setFlyerAnalyzed] = useState(false)
   const [flyerStyleNotes, setFlyerStyleNotes] = useState<string | null>(null)
   const [customBgPrompt, setCustomBgPrompt] = useState<string | null>(null)
-  const flyerInputRef = useRef<HTMLInputElement>(null)
-
-  const analyzeFlyer = useCallback(async (file: File) => {
-    setAnalyzingFlyer(true)
-    setFlyerAnalyzed(false)
-    setFlyerStyleNotes(null)
-    setCustomBgPrompt(null)
-    try {
-      const fd = new FormData()
-      fd.append('flyer', file)
-      const res = await fetch('/api/analyze-flyer', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Analysis failed')
-      const data = await res.json()
-      // Auto-populate style from analysis
-      setStyle(p => ({
-        ...p,
-        bgType:      data.bgType      || p.bgType,
-        vibe:        data.vibe        || p.vibe,
-        fontStyle:   data.fontStyle   || p.fontStyle,
-        accentColor: data.accentColor || p.accentColor,
-        textColor:   data.textColor   || p.textColor,
-      }))
-      if (data.backgroundPrompt) setCustomBgPrompt(data.backgroundPrompt)
-      if (data.styleNotes) setFlyerStyleNotes(data.styleNotes)
-      setFlyerAnalyzed(true)
-    } catch {
-      alert('Could not analyze flyer — you can still set the style manually.')
-    }
-    setAnalyzingFlyer(false)
-  }, [])
-
-  const handleFlyerUpload = useCallback((file: File) => {
-    setFlyerFile(file)
-    setFlyerPreview(URL.createObjectURL(file))
-    analyzeFlyer(file)
-  }, [analyzeFlyer])
 
   const [generating, setGenerating] = useState(false)
   const [storyDataUrl, setStoryDataUrl] = useState<string | null>(null)
   const [feedDataUrl, setFeedDataUrl] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const [editing, setEditing] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const flyerInputRef = useRef<HTMLInputElement>(null)
+  const customFontRef = useRef<HTMLInputElement>(null)
 
-  // ── Photo handling ──────────────────────────────────────────────────────────
+  // Preload default font
+  useEffect(() => { loadGoogleFont('Bebas Neue') }, [])
+
+  // ── Photo ────────────────────────────────────────────────────────────────────
   const handlePhotoUpload = useCallback((file: File) => {
-    setPhotoFile(file)
-    setBgRemovedUrl(null)
-    setPhotoUrl(URL.createObjectURL(file))
+    setPhotoFile(file); setBgRemovedUrl(null); setPhotoUrl(URL.createObjectURL(file))
   }, [])
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file?.type.startsWith('image/')) handlePhotoUpload(file)
+    const f = e.dataTransfer.files[0]
+    if (f?.type.startsWith('image/')) handlePhotoUpload(f)
   }, [handlePhotoUpload])
-
   const removeBackground = useCallback(async () => {
     if (!photoFile) return
     setRemovingBg(true)
@@ -338,76 +509,97 @@ export default function CreatePage() {
       const { removeBackground: removeBg } = await import('@imgly/background-removal')
       const blob = await removeBg(photoFile, {
         publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
-        progress: () => {},
-        output: { format: 'image/png', quality: 0.95 }
+        progress: () => {}, output: { format: 'image/png', quality: 0.95 }
       })
       const url = URL.createObjectURL(blob)
-      setBgRemovedUrl(url)
-      setPhotoUrl(url)
-    } catch {
-      alert('Background removal failed — try a pre-cut PNG.')
-    }
+      setBgRemovedUrl(url); setPhotoUrl(url)
+    } catch { alert('Background removal failed — try a pre-cut PNG.') }
     setRemovingBg(false)
   }, [photoFile])
 
-  // ── Generation ──────────────────────────────────────────────────────────────
-  const generate = useCallback(async (regenerateBg = true) => {
-    setGenerating(true)
-    setGenError(null)
+  // ── Custom font ──────────────────────────────────────────────────────────────
+  const handleCustomFont = useCallback(async (file: File) => {
+    const url = URL.createObjectURL(file)
+    const name = file.name.replace(/\.[^.]+$/, '')
+    const ff = new FontFace(name, `url(${url})`)
+    await ff.load()
+    document.fonts.add(ff)
+    setBrand(p => ({ ...p, fontFamily: 'custom', customFontName: name }))
+  }, [])
+
+  // ── Flyer analysis ───────────────────────────────────────────────────────────
+  const analyzeFlyer = useCallback(async (file: File) => {
+    setAnalyzingFlyer(true); setFlyerAnalyzed(false)
     try {
-      // Fetch background images (both formats in parallel)
+      const fd = new FormData(); fd.append('flyer', file)
+      const res = await fetch('/api/analyze-flyer', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setStyle(p => ({
+        ...p,
+        bgType: data.bgType || p.bgType,
+        vibe:   data.vibe   || p.vibe,
+      }))
+      setBrand(p => ({
+        ...p,
+        colors: {
+          ...p.colors,
+          date:       data.accentColor  || p.colors.date,
+          artistName: data.textColor    || p.colors.artistName,
+          venueName:  data.textColor    || p.colors.venueName,
+          supporting: data.textColor    || p.colors.supporting,
+        },
+        fontStyle: data.fontStyle || p.fontFamily,
+      }))
+      if (data.backgroundPrompt) setCustomBgPrompt(data.backgroundPrompt)
+      if (data.styleNotes) setFlyerStyleNotes(data.styleNotes)
+      setFlyerAnalyzed(true)
+    } catch { alert('Could not analyze flyer — set style manually.') }
+    setAnalyzingFlyer(false)
+  }, [])
+
+  const handleFlyerUpload = useCallback((file: File) => {
+    setFlyerFile(file); setFlyerPreview(URL.createObjectURL(file)); analyzeFlyer(file)
+  }, [analyzeFlyer])
+
+  // ── Logo helpers ─────────────────────────────────────────────────────────────
+  const handleLogoUpload = (field: 'venueLogoUrl' | 'artistLogoUrl') => (file: File) => {
+    setBrand(p => ({ ...p, [field]: URL.createObjectURL(file) }))
+  }
+
+  // ── Generation ───────────────────────────────────────────────────────────────
+  const generate = useCallback(async () => {
+    setGenerating(true); setGenError(null)
+    try {
+      await loadGoogleFont(brand.fontFamily)
+
       const [storyBgRes, feedBgRes] = await Promise.all([
-        regenerateBg ? fetch('/api/generate-background', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        fetch('/api/generate-background', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'story', customPrompt: customBgPrompt })
-        }) : null,
-        regenerateBg ? fetch('/api/generate-background', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        }),
+        fetch('/api/generate-background', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'feed', customPrompt: customBgPrompt })
-        }) : null,
+        }),
       ])
 
-      let storyBgUrl: string
-      let feedBgUrl: string
-
-      if (storyBgRes && feedBgRes) {
-        const [storyBlob, feedBlob] = await Promise.all([storyBgRes.blob(), feedBgRes.blob()])
-        storyBgUrl = URL.createObjectURL(storyBlob)
-        feedBgUrl = URL.createObjectURL(feedBlob)
-      } else {
-        // Keep existing background - we'd normally cache these but for simplicity regenerate
-        setGenerating(false)
-        return
-      }
-
+      const [storyBlob, feedBlob] = await Promise.all([storyBgRes.blob(), feedBgRes.blob()])
+      const storyBgUrl = URL.createObjectURL(storyBlob)
+      const feedBgUrl  = URL.createObjectURL(feedBlob)
       const activePhoto = bgRemovedUrl || photoUrl
 
-      const [storyCanvas, feedCanvas] = await Promise.all([
-        compositeFlyer({ bgUrl: storyBgUrl, photoUrl: activePhoto, details, style, width: 1080, height: 1920 }),
-        compositeFlyer({ bgUrl: feedBgUrl,  photoUrl: activePhoto, details, style, width: 1080, height: 1350 }),
+      const [story, feed] = await Promise.all([
+        compositeFlyer({ bgUrl: storyBgUrl, photoUrl: activePhoto, details, style, brand, width: 1080, height: 1920 }),
+        compositeFlyer({ bgUrl: feedBgUrl,  photoUrl: activePhoto, details, style, brand, width: 1080, height: 1350 }),
       ])
-
-      setStoryDataUrl(storyCanvas)
-      setFeedDataUrl(feedCanvas)
-      setStep(3)
-    } catch (err) {
-      console.error(err)
-      setGenError('Generation failed. Please try again.')
+      setStoryDataUrl(story); setFeedDataUrl(feed); setStep(4)
+    } catch (e) {
+      console.error(e); setGenError('Generation failed. Please try again.')
     }
     setGenerating(false)
-  }, [style, details, photoUrl, bgRemovedUrl, customBgPrompt])
+  }, [style, details, brand, photoUrl, bgRemovedUrl, customBgPrompt])
 
-  // ── Re-composite without new background ────────────────────────────────────
-  const recomposite = useCallback(async () => {
-    if (!storyDataUrl || !feedDataUrl) return
-    setGenerating(true)
-    // For recomposite we'd need to cache bg URLs - for now just regenerate
-    await generate(true)
-  }, [generate, storyDataUrl, feedDataUrl])
-
-  // ── Download ────────────────────────────────────────────────────────────────
   const download = (dataUrl: string, label: string) => {
     const a = document.createElement('a')
     a.href = dataUrl
@@ -417,47 +609,37 @@ export default function CreatePage() {
 
   const canProceed = [
     !!(details.artistName && details.date && details.venueName),
-    true,
-    true,
-    true,
+    true, true, true, true
   ][step]
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '11px 14px', borderRadius: '10px',
-    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-    color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
-  }
-  const labelStyle: React.CSSProperties = {
-    fontSize: '12px', fontWeight: 600, color: '#9CA3AF',
-    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block'
-  }
+  const activeFontName = brand.fontFamily === 'custom' ? brand.customFontName : brand.fontFamily
 
   return (
-    <div style={{ maxWidth: 960 }}>
+    <div style={{ maxWidth: 980 }}>
       {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
+      <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Wand2 size={20} color="#C4A0FF" /> AI Content Creator
         </h1>
-        <p style={{ color: '#9CA3AF', fontSize: '14px' }}>AI-generated event flyers — Story &amp; Feed, ready to post.</p>
+        <p style={{ color: '#9CA3AF', fontSize: '14px' }}>AI-generated event flyers — fully customizable, Story &amp; Feed ready.</p>
       </div>
 
-      {/* Steps */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '28px', alignItems: 'center' }}>
+      {/* Step indicator */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', alignItems: 'center', flexWrap: 'wrap' }}>
         {STEPS.map((s, i) => (
-          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: i < step ? 'pointer' : 'default' }}
+          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: i < step ? 'pointer' : 'default' }}
               onClick={() => i < step && setStep(i)}>
-              <div style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', fontSize: '11px', fontWeight: 700,
+              <div style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '10px', fontWeight: 700,
                 background: i < step ? 'rgba(124,58,237,0.8)' : i === step ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.05)',
                 border: i === step ? '1px solid rgba(196,160,255,0.4)' : '1px solid transparent',
-                color: i <= step ? '#C4A0FF' : '#555' }}>
-                {i < step ? <Check size={11} /> : i + 1}
+                color: i <= step ? '#C4A0FF' : '#444' }}>
+                {i < step ? <Check size={10} /> : i + 1}
               </div>
-              <span style={{ fontSize: '13px', color: i === step ? '#C4A0FF' : i < step ? '#9CA3AF' : '#555', fontWeight: i === step ? 600 : 400 }}>{s}</span>
+              <span style={{ fontSize: '12px', color: i === step ? '#C4A0FF' : i < step ? '#9CA3AF' : '#444', fontWeight: i === step ? 600 : 400 }}>{s}</span>
             </div>
-            {i < STEPS.length - 1 && <div style={{ width: 20, height: 1, background: 'rgba(255,255,255,0.07)', margin: '0 2px' }} />}
+            {i < STEPS.length - 1 && <div style={{ width: 16, height: 1, background: 'rgba(255,255,255,0.07)', margin: '0 1px' }} />}
           </div>
         ))}
       </div>
@@ -465,38 +647,38 @@ export default function CreatePage() {
       {/* ── Step 0: Details ───────────────────────────────────────────────── */}
       {step === 0 && (
         <div className="card" style={{ maxWidth: 540 }}>
-          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '20px' }}>Event Details</h2>
+          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '18px' }}>Event Details</h2>
           <div style={{ display: 'grid', gap: '14px' }}>
             <div>
-              <label style={labelStyle}>Artist / Headliner *</label>
-              <input style={inputStyle} placeholder="e.g. Chris Lorenzo" value={details.artistName}
+              <label style={lbl}>Artist / Headliner *</label>
+              <input style={inp} placeholder="e.g. Chris Lorenzo" value={details.artistName}
                 onChange={e => setDetails(p => ({ ...p, artistName: e.target.value }))} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={labelStyle}>Date *</label>
-                <input style={inputStyle} type="date" value={details.date}
+                <label style={lbl}>Date *</label>
+                <input style={inp} type="date" value={details.date}
                   onChange={e => setDetails(p => ({ ...p, date: e.target.value }))} />
               </div>
               <div>
-                <label style={labelStyle}>Time / Doors</label>
-                <input style={inputStyle} placeholder="e.g. 10 PM" value={details.time}
+                <label style={lbl}>Time / Doors</label>
+                <input style={inp} placeholder="e.g. 10 PM" value={details.time}
                   onChange={e => setDetails(p => ({ ...p, time: e.target.value }))} />
               </div>
             </div>
             <div>
-              <label style={labelStyle}>Venue Name *</label>
-              <input style={inputStyle} placeholder="e.g. Palm Tree Club Miami" value={details.venueName}
+              <label style={lbl}>Venue Name *</label>
+              <input style={inp} placeholder="e.g. Palm Tree Club Miami" value={details.venueName}
                 onChange={e => setDetails(p => ({ ...p, venueName: e.target.value }))} />
             </div>
             <div>
-              <label style={labelStyle}>Supporting Artists <span style={{ textTransform: 'none', fontWeight: 400, color: '#555' }}>(comma separated)</span></label>
-              <input style={inputStyle} placeholder="e.g. Solardo, Rebüke, Max Stern" value={details.supportingArtists}
+              <label style={lbl}>Supporting Artists <span style={{ textTransform: 'none', fontWeight: 400, color: '#555' }}>(comma separated)</span></label>
+              <input style={inp} placeholder="e.g. Solardo, Rebüke" value={details.supportingArtists}
                 onChange={e => setDetails(p => ({ ...p, supportingArtists: e.target.value }))} />
             </div>
             <div>
-              <label style={labelStyle}>Ticket / Info Link</label>
-              <input style={inputStyle} placeholder="https://ra.co/..." value={details.ticketLink}
+              <label style={lbl}>Ticket / Info Link</label>
+              <input style={inp} placeholder="https://ra.co/..." value={details.ticketLink}
                 onChange={e => setDetails(p => ({ ...p, ticketLink: e.target.value }))} />
             </div>
           </div>
@@ -508,15 +690,15 @@ export default function CreatePage() {
         <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div className="card" style={{ maxWidth: 440, flex: 1 }}>
             <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>Artist Photo</h2>
-            <p style={{ color: '#9CA3AF', fontSize: '13px', marginBottom: '20px' }}>
-              Upload a photo — we&apos;ll remove the background, or use a pre-cut PNG for best results.
+            <p style={{ color: '#9CA3AF', fontSize: '13px', marginBottom: '18px' }}>
+              Upload a photo — remove the background automatically, or use a pre-cut PNG.
             </p>
             <div onDrop={handleDrop} onDragOver={e => e.preventDefault()}
               onClick={() => fileInputRef.current?.click()}
-              style={{ border: '2px dashed rgba(124,58,237,0.25)', borderRadius: '12px', padding: '28px',
+              style={{ border: '2px dashed rgba(124,58,237,0.22)', borderRadius: '12px', padding: '28px',
                 textAlign: 'center', cursor: 'pointer', marginBottom: '14px', background: 'rgba(124,58,237,0.03)' }}>
               <Upload size={26} color="#7C3AED" style={{ marginBottom: '8px' }} />
-              <div style={{ fontWeight: 600, marginBottom: '3px', fontSize: '14px' }}>Drop photo or click to upload</div>
+              <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '3px' }}>Drop photo or click to upload</div>
               <div style={{ fontSize: '12px', color: '#555' }}>JPG, PNG, WEBP</div>
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={e => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])} />
@@ -527,12 +709,12 @@ export default function CreatePage() {
                   border: 'none', cursor: removingBg ? 'wait' : 'pointer', color: 'white', marginBottom: '10px',
                   background: removingBg ? 'rgba(124,58,237,0.35)' : 'linear-gradient(135deg,#7C3AED,#C4A0FF)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                {removingBg ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Removing background…</> : <><Wand2 size={14} /> Remove Background</>}
+                {removingBg ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Removing…</> : <><Wand2 size={14} /> Remove Background</>}
               </button>
             )}
             {bgRemovedUrl && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px',
-                background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)', marginBottom: '10px' }}>
+                background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.22)', marginBottom: '10px' }}>
                 <Check size={13} color="#34d399" />
                 <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 600 }}>Background removed</span>
                 <button onClick={() => { setPhotoUrl(URL.createObjectURL(photoFile!)); setBgRemovedUrl(null) }}
@@ -546,129 +728,95 @@ export default function CreatePage() {
                 <X size={12} /> Remove photo
               </button>
             )}
-            {!photoFile && (
-              <p style={{ fontSize: '12px', color: '#555', textAlign: 'center' }}>Photo is optional — skip for art-only flyers.</p>
-            )}
+            {!photoFile && <p style={{ fontSize: '12px', color: '#555', textAlign: 'center' }}>Optional — skip for art/logo-only flyers.</p>}
           </div>
           {photoUrl && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
               <div style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>Preview</div>
-              <img src={photoUrl} alt="preview" style={{ width: 150, height: 190, objectFit: 'contain',
-                borderRadius: '10px', background: 'repeating-conic-gradient(#1a1a1a 0% 25%, #111 0% 50%) 0 0/16px 16px' }} />
+              <img src={photoUrl} alt="preview" style={{ width: 150, height: 190, objectFit: 'contain', borderRadius: '10px',
+                background: 'repeating-conic-gradient(#1a1a1a 0% 25%,#111 0% 50%) 0 0/16px 16px' }} />
             </div>
           )}
         </div>
       )}
 
-      {/* ── Step 2: Style ─────────────────────────────────────────────────── */}
+      {/* ── Step 2: AI Style ──────────────────────────────────────────────── */}
       {step === 2 && (
-        <div className="card" style={{ maxWidth: 600 }}>
-          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>Style & Vibe</h2>
-          <p style={{ color: '#9CA3AF', fontSize: '13px', marginBottom: '20px' }}>Set your style manually, or upload a past flyer and we&apos;ll match your brand automatically.</p>
+        <div className="card" style={{ maxWidth: 620 }}>
+          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '4px' }}>AI Background Style</h2>
+          <p style={{ color: '#9CA3AF', fontSize: '13px', marginBottom: '20px' }}>
+            Upload a past flyer to auto-match your brand, or set the vibe manually.
+          </p>
 
           {/* Match existing flyer */}
-          <div style={{ marginBottom: '24px', padding: '16px 18px', borderRadius: '14px',
+          <div style={{ marginBottom: '22px', padding: '14px 16px', borderRadius: '12px',
             background: flyerAnalyzed ? 'rgba(52,211,153,0.06)' : 'rgba(196,160,255,0.05)',
-            border: flyerAnalyzed ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(196,160,255,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              {flyerPreview ? (
-                <img src={flyerPreview} alt="flyer" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
-              ) : (
-                <div style={{ width: 52, height: 52, borderRadius: '8px', background: 'rgba(196,160,255,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '22px' }}>🎨</div>
-              )}
+            border: flyerAnalyzed ? '1px solid rgba(52,211,153,0.22)' : '1px solid rgba(196,160,255,0.18)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {flyerPreview
+                ? <img src={flyerPreview} alt="ref" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+                : <div style={{ width: 48, height: 48, borderRadius: '6px', background: 'rgba(196,160,255,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '20px' }}>🎨</div>
+              }
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '3px', color: flyerAnalyzed ? '#34d399' : 'white' }}>
-                  {flyerAnalyzed ? '✓ Brand Matched' : 'Match My Brand'}
+                <div style={{ fontWeight: 700, fontSize: '13px', color: flyerAnalyzed ? '#34d399' : 'white', marginBottom: '2px' }}>
+                  {flyerAnalyzed ? '✓ Brand matched' : 'Match my brand'}
                 </div>
-                <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0 }}>
-                  {flyerStyleNotes || 'Upload a past flyer — AI will match your colors, vibe, and style.'}
+                <p style={{ fontSize: '11px', color: '#6B7280', margin: 0 }}>
+                  {flyerStyleNotes || 'Upload a past flyer — AI extracts your colors, vibe & style.'}
                 </p>
               </div>
-              <div style={{ flexShrink: 0 }}>
-                {analyzingFlyer ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#C4A0FF' }}>
-                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Analyzing…
+              {analyzingFlyer
+                ? <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#C4A0FF', flexShrink: 0 }}>
+                    <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Analyzing…
                   </div>
-                ) : (
-                  <button onClick={() => flyerInputRef.current?.click()}
-                    style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: 600, fontSize: '12px', border: 'none',
-                      cursor: 'pointer', color: 'white',
+                : <button onClick={() => flyerInputRef.current?.click()}
+                    style={{ padding: '7px 14px', borderRadius: '7px', fontWeight: 600, fontSize: '12px', border: 'none',
+                      cursor: 'pointer', color: 'white', flexShrink: 0,
                       background: flyerAnalyzed ? 'rgba(52,211,153,0.2)' : 'linear-gradient(135deg,#7C3AED,#C4A0FF)' }}>
                     {flyerAnalyzed ? 'Change' : 'Upload Flyer'}
                   </button>
-                )}
-                <input ref={flyerInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-                  onChange={e => e.target.files?.[0] && handleFlyerUpload(e.target.files[0])} />
-              </div>
+              }
+              <input ref={flyerInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => e.target.files?.[0] && handleFlyerUpload(e.target.files[0])} />
             </div>
           </div>
 
-          {/* Background type */}
-          <div style={{ marginBottom: '22px' }}>
-            <label style={labelStyle}>Background Type</label>
+          {/* BG type */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={lbl}>Background Type</label>
             <div style={{ display: 'flex', gap: '10px' }}>
-              {[['photo', '📷', 'Photographic', 'Cinematic, real-world feel'],
-                ['illustrative', '🎨', 'Illustrative', 'Art-forward, graphic design']
-               ].map(([key, em, label, desc]) => (
-                <button key={key} onClick={() => setStyle(p => ({ ...p, bgType: key as StyleConfig['bgType'] }))}
-                  style={{ flex: 1, padding: '14px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer',
-                    border: style.bgType === key ? '1px solid rgba(196,160,255,0.5)' : '1px solid rgba(255,255,255,0.07)',
-                    background: style.bgType === key ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)' }}>
-                  <div style={{ fontSize: '20px', marginBottom: '6px' }}>{em}</div>
-                  <div style={{ fontWeight: 700, fontSize: '13px', color: style.bgType === key ? '#C4A0FF' : 'white', marginBottom: '2px' }}>{label}</div>
-                  <div style={{ fontSize: '11px', color: '#555' }}>{desc}</div>
+              {[['photo','📷','Photographic'],['illustrative','🎨','Illustrative']].map(([k, e, l]) => (
+                <button key={k} onClick={() => setStyle(p => ({ ...p, bgType: k as StyleConfig['bgType'] }))}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
+                    border: style.bgType === k ? '1px solid rgba(196,160,255,0.45)' : '1px solid rgba(255,255,255,0.07)',
+                    background: style.bgType === k ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '18px', marginBottom: '4px' }}>{e}</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: style.bgType === k ? '#C4A0FF' : '#9CA3AF' }}>{l}</div>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Vibe */}
-          <div style={{ marginBottom: '22px' }}>
-            <label style={labelStyle}>Vibe</label>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={lbl}>Vibe</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px' }}>
               {VIBES.map(v => (
                 <button key={v.key} onClick={() => setStyle(p => ({ ...p, vibe: v.key }))}
-                  style={{ padding: '12px 10px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
-                    border: style.vibe === v.key ? '1px solid rgba(196,160,255,0.5)' : '1px solid rgba(255,255,255,0.07)',
+                  style={{ padding: '10px', borderRadius: '9px', cursor: 'pointer', textAlign: 'center',
+                    border: style.vibe === v.key ? '1px solid rgba(196,160,255,0.45)' : '1px solid rgba(255,255,255,0.07)',
                     background: style.vibe === v.key ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)' }}>
-                  <div style={{ fontSize: '18px', marginBottom: '4px' }}>{v.emoji}</div>
+                  <div style={{ fontSize: '16px', marginBottom: '3px' }}>{v.emoji}</div>
                   <div style={{ fontSize: '11px', fontWeight: 600, color: style.vibe === v.key ? '#C4A0FF' : '#9CA3AF' }}>{v.label}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Accent color */}
-          <div style={{ marginBottom: '22px' }}>
-            <label style={labelStyle}>Accent Color <span style={{ textTransform: 'none', fontWeight: 400, color: '#555' }}>(for date & highlights)</span></label>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {ACCENT_PRESETS.map(c => (
-                <button key={c} onClick={() => setStyle(p => ({ ...p, accentColor: c }))}
-                  style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: style.accentColor === c ? '2px solid white' : '2px solid transparent', cursor: 'pointer', outline: style.accentColor === c ? '2px solid rgba(255,255,255,0.3)' : 'none' }} />
-              ))}
-              <input type="color" value={style.accentColor} onChange={e => setStyle(p => ({ ...p, accentColor: e.target.value }))}
-                style={{ width: 32, height: 32, borderRadius: '50%', border: '2px dashed rgba(255,255,255,0.2)', cursor: 'pointer', background: 'none', padding: 0 }} />
-            </div>
-          </div>
-
-          {/* Typography */}
-          <div style={{ marginBottom: '22px' }}>
-            <label style={labelStyle}>Typography</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {[['bold','Bold / Impact'],['clean','Clean / Modern'],['elegant','Elegant / Serif']].map(([k, l]) => (
-                <button key={k} onClick={() => setStyle(p => ({ ...p, fontStyle: k as StyleConfig['fontStyle'] }))}
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    border: style.fontStyle === k ? '1px solid rgba(196,160,255,0.4)' : '1px solid rgba(255,255,255,0.07)',
-                    background: style.fontStyle === k ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)',
-                    color: style.fontStyle === k ? '#C4A0FF' : '#9CA3AF' }}>{l}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Artist name size */}
+          {/* Artist size */}
           <div>
-            <label style={labelStyle}>Artist Name Size — {style.artistSize}%</label>
+            <label style={lbl}>Artist Name Size — {style.artistSize}%</label>
             <input type="range" min={8} max={20} value={style.artistSize}
               onChange={e => setStyle(p => ({ ...p, artistSize: Number(e.target.value) }))}
               style={{ width: '100%', accentColor: '#7C3AED' }} />
@@ -676,19 +824,126 @@ export default function CreatePage() {
         </div>
       )}
 
-      {/* ── Step 3: Results ───────────────────────────────────────────────── */}
+      {/* ── Step 3: Brand Kit ─────────────────────────────────────────────── */}
       {step === 3 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', maxWidth: 820 }}>
+
+          {/* Colors */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <Palette size={15} color="#C4A0FF" />
+              <h3 style={{ fontWeight: 700, fontSize: '14px' }}>Brand Colors</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <ColorRow label="Artist Name" value={brand.colors.artistName}
+                onChange={v => setBrand(p => ({ ...p, colors: { ...p.colors, artistName: v } }))} />
+              <ColorRow label="Venue Name" value={brand.colors.venueName}
+                onChange={v => setBrand(p => ({ ...p, colors: { ...p.colors, venueName: v } }))} />
+              <ColorRow label="Date / Accent" value={brand.colors.date}
+                onChange={v => setBrand(p => ({ ...p, colors: { ...p.colors, date: v } }))} />
+              <ColorRow label="Supporting Artists" value={brand.colors.supporting}
+                onChange={v => setBrand(p => ({ ...p, colors: { ...p.colors, supporting: v } }))} />
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
+              <ColorRow label="Color Overlay" value={brand.colors.overlay}
+                onChange={v => setBrand(p => ({ ...p, colors: { ...p.colors, overlay: v } }))} />
+              <div>
+                <div style={{ ...lbl }}>Overlay Opacity — {Math.round(brand.colors.overlayOpacity * 100)}%</div>
+                <input type="range" min={0} max={0.7} step={0.01} value={brand.colors.overlayOpacity}
+                  onChange={e => setBrand(p => ({ ...p, colors: { ...p.colors, overlayOpacity: Number(e.target.value) } }))}
+                  style={{ width: '100%', accentColor: '#7C3AED' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Fonts */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <Type size={15} color="#C4A0FF" />
+              <h3 style={{ fontWeight: 700, fontSize: '14px' }}>Typography</h3>
+            </div>
+            {activeFontName && (
+              <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(124,58,237,0.1)',
+                border: '1px solid rgba(196,160,255,0.25)', marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>Selected font</div>
+                <div style={{ fontSize: '18px', fontFamily: `"${activeFontName}", sans-serif`, fontWeight: 900, color: '#C4A0FF' }}>
+                  {activeFontName}
+                </div>
+              </div>
+            )}
+            <FontPicker value={brand.fontFamily} onChange={f => setBrand(p => ({ ...p, fontFamily: f, customFontName: null }))} />
+            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ ...lbl, marginBottom: '8px' }}>Or upload your font</div>
+              <button onClick={() => customFontRef.current?.click()}
+                style={{ width: '100%', padding: '9px', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.15)',
+                  cursor: 'pointer', color: '#9CA3AF', background: 'transparent', fontSize: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <Upload size={12} /> Upload TTF / OTF / WOFF
+              </button>
+              <input ref={customFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" style={{ display: 'none' }}
+                onChange={e => e.target.files?.[0] && handleCustomFont(e.target.files[0])} />
+              {brand.customFontName && (
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#34d399' }}>
+                  ✓ {brand.customFontName} loaded
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Logos */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <ImageIcon size={15} color="#C4A0FF" />
+              <h3 style={{ fontWeight: 700, fontSize: '14px' }}>Logos</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <LogoUploader
+                label="Venue Logo" url={brand.venueLogoUrl} pos={brand.venueLogoPos} size={brand.venueLogoSize}
+                onUpload={handleLogoUpload('venueLogoUrl')}
+                onPos={p => setBrand(prev => ({ ...prev, venueLogoPos: p }))}
+                onSize={s => setBrand(prev => ({ ...prev, venueLogoSize: s }))}
+                onClear={() => setBrand(p => ({ ...p, venueLogoUrl: null }))}
+              />
+              <LogoUploader
+                label="Artist Logo" url={brand.artistLogoUrl} pos={brand.artistLogoPos} size={brand.artistLogoSize}
+                onUpload={handleLogoUpload('artistLogoUrl')}
+                onPos={p => setBrand(prev => ({ ...prev, artistLogoPos: p }))}
+                onSize={s => setBrand(prev => ({ ...prev, artistLogoSize: s }))}
+                onClear={() => setBrand(p => ({ ...p, artistLogoUrl: null }))}
+              />
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <h3 style={{ fontWeight: 700, fontSize: '14px', marginBottom: '14px' }}>Ready to Generate</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#9CA3AF' }}>
+                <div>🎨 <strong style={{ color: 'white' }}>{style.bgType === 'photo' ? 'Photographic' : 'Illustrative'}</strong> · {VIBES.find(v => v.key === style.vibe)?.label}</div>
+                <div>🔤 <strong style={{ color: 'white' }}>{activeFontName || 'Default'}</strong></div>
+                <div>🎨 Accent: <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: brand.colors.date, verticalAlign: 'middle', marginRight: 4 }} /><strong style={{ color: 'white' }}>{brand.colors.date}</strong></div>
+                {flyerAnalyzed && <div>✓ <strong style={{ color: '#34d399' }}>Brand matched from uploaded flyer</strong></div>}
+                {brand.venueLogoUrl && <div>🏢 Venue logo added</div>}
+                {brand.artistLogoUrl && <div>🎧 Artist logo added</div>}
+                {(bgRemovedUrl || photoUrl) && <div>📸 Artist photo ready</div>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 4: Results ───────────────────────────────────────────────── */}
+      {step === 4 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '3px' }}>Your Flyers</h2>
-              <p style={{ color: '#9CA3AF', fontSize: '13px' }}>Download or regenerate for a new background variation.</p>
+              <p style={{ color: '#9CA3AF', fontSize: '13px' }}>Download both formats or regenerate for a fresh variation.</p>
             </div>
-            <button onClick={() => generate(true)} disabled={generating}
-              style={{ padding: '10px 18px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', border: '1px solid rgba(255,255,255,0.1)',
-                cursor: generating ? 'wait' : 'pointer', color: '#9CA3AF', background: 'transparent',
-                display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <RefreshCw size={13} style={generating ? { animation: 'spin 1s linear infinite' } : {}} />
+            <button onClick={generate} disabled={generating}
+              style={{ padding: '9px 16px', borderRadius: '8px', fontWeight: 600, fontSize: '13px',
+                border: '1px solid rgba(255,255,255,0.1)', cursor: generating ? 'wait' : 'pointer',
+                color: '#9CA3AF', background: 'transparent', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RefreshCw size={12} style={generating ? { animation: 'spin 1s linear infinite' } : {}} />
               Regenerate
             </button>
           </div>
@@ -697,23 +952,18 @@ export default function CreatePage() {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', gap: '16px' }}>
               <Loader2 size={32} color="#C4A0FF" style={{ animation: 'spin 1s linear infinite' }} />
               <div style={{ color: '#9CA3AF', fontSize: '14px' }}>Generating your flyers…</div>
-              <div style={{ color: '#555', fontSize: '12px' }}>AI is creating a custom background — this takes about 15–30 seconds</div>
+              <div style={{ color: '#555', fontSize: '12px' }}>AI is creating a custom background — ~15–30 seconds</div>
             </div>
           )}
-
           {!generating && genError && (
-            <div style={{ padding: '20px', borderRadius: '12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', marginBottom: '20px' }}>
-              ⚠️ {genError}
-            </div>
+            <div style={{ padding: '18px', borderRadius: '12px', background: 'rgba(239,68,68,0.07)',
+              border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', marginBottom: '20px' }}>⚠️ {genError}</div>
           )}
-
           {!generating && storyDataUrl && feedDataUrl && (
             <div style={{ display: 'flex', gap: '36px', flexWrap: 'wrap' }}>
-              {/* Story */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Story · 9:16</div>
-                <img src={storyDataUrl} alt="story flyer" style={{ width: 240, height: 427, borderRadius: 12, objectFit: 'cover',
-                  boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }} />
+                <img src={storyDataUrl} alt="story" style={{ width: 240, height: 427, borderRadius: 12, objectFit: 'cover', boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }} />
                 <button onClick={() => download(storyDataUrl, 'story')}
                   style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', border: 'none',
                     cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '6px',
@@ -721,11 +971,9 @@ export default function CreatePage() {
                   <Download size={13} /> Download Story
                 </button>
               </div>
-              {/* Feed */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Feed · 4:5</div>
-                <img src={feedDataUrl} alt="feed flyer" style={{ width: 300, height: 375, borderRadius: 12, objectFit: 'cover',
-                  boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }} />
+                <img src={feedDataUrl} alt="feed" style={{ width: 300, height: 375, borderRadius: 12, objectFit: 'cover', boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }} />
                 <button onClick={() => download(feedDataUrl, 'feed')}
                   style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', border: 'none',
                     cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '6px',
@@ -735,50 +983,11 @@ export default function CreatePage() {
               </div>
             </div>
           )}
-
-          {/* Style tweaks */}
-          {!generating && storyDataUrl && (
-            <div className="card" style={{ marginTop: '28px', maxWidth: 560 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <h3 style={{ fontWeight: 700, fontSize: '14px' }}>Adjust & Regenerate</h3>
-                <button onClick={recomposite} disabled={generating}
-                  style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(196,160,255,0.3)',
-                    cursor: 'pointer', color: '#C4A0FF', background: 'rgba(124,58,237,0.1)' }}>
-                  Apply changes
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>Vibe</label>
-                  <select value={style.vibe} onChange={e => setStyle(p => ({ ...p, vibe: e.target.value }))} style={inputStyle}>
-                    {VIBES.map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Typography</label>
-                  <select value={style.fontStyle} onChange={e => setStyle(p => ({ ...p, fontStyle: e.target.value as StyleConfig['fontStyle'] }))} style={inputStyle}>
-                    <option value="bold">Bold / Impact</option>
-                    <option value="clean">Clean / Modern</option>
-                    <option value="elegant">Elegant / Serif</option>
-                  </select>
-                </div>
-                <div style={{ gridColumn: '1/-1' }}>
-                  <label style={labelStyle}>Accent Color</label>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {ACCENT_PRESETS.map(c => (
-                      <button key={c} onClick={() => setStyle(p => ({ ...p, accentColor: c }))}
-                        style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: style.accentColor === c ? '2px solid white' : '2px solid transparent', cursor: 'pointer' }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── Nav buttons ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '28px', maxWidth: step === 3 ? 'none' : 560 }}>
+      {/* ── Navigation ────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '28px', maxWidth: step === 3 ? 820 : step === 4 ? 'none' : 540 }}>
         <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
           style={{ padding: '11px 22px', borderRadius: '10px', fontWeight: 600, fontSize: '14px',
             border: '1px solid rgba(255,255,255,0.08)', cursor: step === 0 ? 'default' : 'pointer',
@@ -786,8 +995,7 @@ export default function CreatePage() {
             display: 'flex', alignItems: 'center', gap: '6px' }}>
           <ChevronLeft size={15} /> Back
         </button>
-
-        {step < 2 && (
+        {step < 3 && (
           <button onClick={() => setStep(s => s + 1)} disabled={!canProceed}
             style={{ padding: '11px 28px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
               border: 'none', cursor: canProceed ? 'pointer' : 'default', color: 'white',
@@ -797,9 +1005,8 @@ export default function CreatePage() {
             Continue <ChevronRight size={15} />
           </button>
         )}
-
-        {step === 2 && (
-          <button onClick={() => generate(true)} disabled={generating}
+        {step === 3 && (
+          <button onClick={generate} disabled={generating}
             style={{ padding: '11px 28px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
               border: 'none', cursor: generating ? 'wait' : 'pointer', color: 'white',
               background: generating ? 'rgba(124,58,237,0.4)' : 'linear-gradient(135deg,#7C3AED,#C4A0FF)',
@@ -811,7 +1018,6 @@ export default function CreatePage() {
           </button>
         )}
       </div>
-
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
