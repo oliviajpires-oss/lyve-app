@@ -266,6 +266,50 @@ export default function CreatePage() {
   const [bgRemovedUrl, setBgRemovedUrl] = useState<string | null>(null)
   const [removingBg, setRemovingBg] = useState(false)
 
+  // Flyer analysis state
+  const [flyerFile, setFlyerFile] = useState<File | null>(null)
+  const [flyerPreview, setFlyerPreview] = useState<string | null>(null)
+  const [analyzingFlyer, setAnalyzingFlyer] = useState(false)
+  const [flyerAnalyzed, setFlyerAnalyzed] = useState(false)
+  const [flyerStyleNotes, setFlyerStyleNotes] = useState<string | null>(null)
+  const [customBgPrompt, setCustomBgPrompt] = useState<string | null>(null)
+  const flyerInputRef = useRef<HTMLInputElement>(null)
+
+  const analyzeFlyer = useCallback(async (file: File) => {
+    setAnalyzingFlyer(true)
+    setFlyerAnalyzed(false)
+    setFlyerStyleNotes(null)
+    setCustomBgPrompt(null)
+    try {
+      const fd = new FormData()
+      fd.append('flyer', file)
+      const res = await fetch('/api/analyze-flyer', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Analysis failed')
+      const data = await res.json()
+      // Auto-populate style from analysis
+      setStyle(p => ({
+        ...p,
+        bgType:      data.bgType      || p.bgType,
+        vibe:        data.vibe        || p.vibe,
+        fontStyle:   data.fontStyle   || p.fontStyle,
+        accentColor: data.accentColor || p.accentColor,
+        textColor:   data.textColor   || p.textColor,
+      }))
+      if (data.backgroundPrompt) setCustomBgPrompt(data.backgroundPrompt)
+      if (data.styleNotes) setFlyerStyleNotes(data.styleNotes)
+      setFlyerAnalyzed(true)
+    } catch {
+      alert('Could not analyze flyer — you can still set the style manually.')
+    }
+    setAnalyzingFlyer(false)
+  }, [])
+
+  const handleFlyerUpload = useCallback((file: File) => {
+    setFlyerFile(file)
+    setFlyerPreview(URL.createObjectURL(file))
+    analyzeFlyer(file)
+  }, [analyzeFlyer])
+
   const [generating, setGenerating] = useState(false)
   const [storyDataUrl, setStoryDataUrl] = useState<string | null>(null)
   const [feedDataUrl, setFeedDataUrl] = useState<string | null>(null)
@@ -316,12 +360,12 @@ export default function CreatePage() {
         regenerateBg ? fetch('/api/generate-background', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'story' })
+          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'story', customPrompt: customBgPrompt })
         }) : null,
         regenerateBg ? fetch('/api/generate-background', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'feed' })
+          body: JSON.stringify({ bgType: style.bgType, vibe: style.vibe, format: 'feed', customPrompt: customBgPrompt })
         }) : null,
       ])
 
@@ -353,7 +397,7 @@ export default function CreatePage() {
       setGenError('Generation failed. Please try again.')
     }
     setGenerating(false)
-  }, [style, details, photoUrl, bgRemovedUrl])
+  }, [style, details, photoUrl, bgRemovedUrl, customBgPrompt])
 
   // ── Re-composite without new background ────────────────────────────────────
   const recomposite = useCallback(async () => {
@@ -519,7 +563,46 @@ export default function CreatePage() {
       {/* ── Step 2: Style ─────────────────────────────────────────────────── */}
       {step === 2 && (
         <div className="card" style={{ maxWidth: 600 }}>
-          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '20px' }}>Style & Vibe</h2>
+          <h2 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>Style & Vibe</h2>
+          <p style={{ color: '#9CA3AF', fontSize: '13px', marginBottom: '20px' }}>Set your style manually, or upload a past flyer and we&apos;ll match your brand automatically.</p>
+
+          {/* Match existing flyer */}
+          <div style={{ marginBottom: '24px', padding: '16px 18px', borderRadius: '14px',
+            background: flyerAnalyzed ? 'rgba(52,211,153,0.06)' : 'rgba(196,160,255,0.05)',
+            border: flyerAnalyzed ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(196,160,255,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {flyerPreview ? (
+                <img src={flyerPreview} alt="flyer" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 52, height: 52, borderRadius: '8px', background: 'rgba(196,160,255,0.1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '22px' }}>🎨</div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '3px', color: flyerAnalyzed ? '#34d399' : 'white' }}>
+                  {flyerAnalyzed ? '✓ Brand Matched' : 'Match My Brand'}
+                </div>
+                <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0 }}>
+                  {flyerStyleNotes || 'Upload a past flyer — AI will match your colors, vibe, and style.'}
+                </p>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {analyzingFlyer ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#C4A0FF' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Analyzing…
+                  </div>
+                ) : (
+                  <button onClick={() => flyerInputRef.current?.click()}
+                    style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: 600, fontSize: '12px', border: 'none',
+                      cursor: 'pointer', color: 'white',
+                      background: flyerAnalyzed ? 'rgba(52,211,153,0.2)' : 'linear-gradient(135deg,#7C3AED,#C4A0FF)' }}>
+                    {flyerAnalyzed ? 'Change' : 'Upload Flyer'}
+                  </button>
+                )}
+                <input ref={flyerInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={e => e.target.files?.[0] && handleFlyerUpload(e.target.files[0])} />
+              </div>
+            </div>
+          </div>
 
           {/* Background type */}
           <div style={{ marginBottom: '22px' }}>

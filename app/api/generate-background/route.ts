@@ -21,11 +21,14 @@ const PROMPTS: Record<string, Record<string, string>> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { bgType, vibe, format } = await req.json()
+    const { bgType, vibe, format, customPrompt } = await req.json()
 
     const type = (bgType === 'illustrative' ? 'illustrative' : 'photo') as 'photo' | 'illustrative'
     const vibeKey = (vibe || 'tropical') as string
-    const prompt = PROMPTS[type]?.[vibeKey] || PROMPTS.photo.tropical
+    // Use custom prompt from flyer analysis if provided, otherwise use preset
+    const prompt = customPrompt
+      ? `${customPrompt}, event poster background, ultra detailed, cinematic, no people, no text, no logos`
+      : PROMPTS[type]?.[vibeKey] || PROMPTS.photo.tropical
 
     const width  = format === 'feed' ? 1080 : 1080
     const height = format === 'feed' ? 1350 : 1920
