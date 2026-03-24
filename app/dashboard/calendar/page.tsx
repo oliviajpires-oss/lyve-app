@@ -384,11 +384,11 @@ export default function CalendarPage() {
                     outline: isToday && !isActive ? '1px solid rgba(124,58,237,0.5)' : 'none'
                   }}>
                   <div>{day}</div>
-                  {/* Slot indicators */}
+                  {/* Slot indicators — small dots */}
                   {!isPast && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '3px' }}>
-                      <span style={{ fontSize: '8px', opacity: dayBusy ? 1 : 0.3 }}>☀️</span>
-                      <span style={{ fontSize: '8px', opacity: nightBusy ? 1 : 0.3 }}>🌙</span>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '3px', marginTop: '4px' }}>
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: dayBusy ? '#FBBF24' : 'rgba(255,255,255,0.12)' }} />
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: nightBusy ? '#818CF8' : 'rgba(255,255,255,0.12)' }} />
                     </div>
                   )}
                 </button>
@@ -415,36 +415,40 @@ export default function CalendarPage() {
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleSlot(dateStr, 'day') }}
                       style={{
-                        padding: '7px 10px',
+                        padding: '7px 12px',
                         borderRadius: '6px',
-                        border: 'none',
+                        border: dayBusy ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(255,255,255,0.07)',
                         cursor: 'pointer',
                         fontSize: '12px',
                         fontWeight: 600,
-                        background: dayBusy ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)',
-                        color: dayBusy ? '#fbbf24' : '#9CA3AF',
+                        background: dayBusy ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.04)',
+                        color: dayBusy ? '#FBBF24' : '#6B7280',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
+                        gap: '7px'
                       }}>
-                      ☀️ Day {dayBusy ? '(Busy)' : '(Free)'}
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: dayBusy ? '#FBBF24' : '#6B7280', flexShrink: 0 }} />
+                      Day
+                      <span style={{ marginLeft: 'auto', fontSize: '11px', opacity: 0.7 }}>{dayBusy ? 'Busy' : 'Free'}</span>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleSlot(dateStr, 'night') }}
                       style={{
-                        padding: '7px 10px',
+                        padding: '7px 12px',
                         borderRadius: '6px',
-                        border: 'none',
+                        border: nightBusy ? '1px solid rgba(129,140,248,0.3)' : '1px solid rgba(255,255,255,0.07)',
                         cursor: 'pointer',
                         fontSize: '12px',
                         fontWeight: 600,
-                        background: nightBusy ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)',
-                        color: nightBusy ? '#fbbf24' : '#9CA3AF',
+                        background: nightBusy ? 'rgba(129,140,248,0.12)' : 'rgba(255,255,255,0.04)',
+                        color: nightBusy ? '#818CF8' : '#6B7280',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
+                        gap: '7px'
                       }}>
-                      🌙 Night {nightBusy ? '(Busy)' : '(Free)'}
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: nightBusy ? '#818CF8' : '#6B7280', flexShrink: 0 }} />
+                      Night
+                      <span style={{ marginLeft: 'auto', fontSize: '11px', opacity: 0.7 }}>{nightBusy ? 'Busy' : 'Free'}</span>
                     </button>
                   </div>
                 )}
@@ -454,22 +458,22 @@ export default function CalendarPage() {
         </div>
 
         {/* Legend */}
-        <div style={{ marginTop: '20px', display: 'flex', gap: '16px', fontSize: '12px', color: '#9CA3AF', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)' }} />
-            Fully Booked
+        <div style={{ marginTop: '20px', display: 'flex', gap: '16px', fontSize: '12px', color: '#6B7280', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#FBBF24' }} />
+            Day booked
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)' }} />
-            Partially Booked
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#818CF8' }} />
+            Night booked
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.12)' }} />
             Available
           </div>
         </div>
-        <p style={{ marginTop: '10px', fontSize: '12px', color: '#9CA3AF' }}>
-          Click a date to toggle ☀️ day and 🌙 night availability independently.
+        <p style={{ marginTop: '10px', fontSize: '12px', color: '#6B7280' }}>
+          Click a date to set day and night availability independently.
         </p>
       </div>
     </div>
